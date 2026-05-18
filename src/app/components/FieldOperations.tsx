@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   CheckCircle2,
   Camera,
   FileText,
-  Mic,
   Upload,
   Clock,
   MapPin,
@@ -13,143 +12,228 @@ import {
   Video,
   BarChart3,
   X,
-  MessageSquare,
-  RotateCcw,
   FolderKanban,
+  Loader2,
+  Paperclip,
 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
+import type { Task } from '../../lib/database.types';
 
-interface AssignedTask {
-  id: string;
-  name: string;
-  phase: string;
-  project: string;
-  assignedTo: string;
-  assignedBy: string;
-  assignedAt: string;
+interface TaskWithRelations extends Task {
+  project: { name: string } | null;
+  phase: { name: string } | null;
 }
 
-interface MyTask {
-  id: string;
-  title: string;
-  project: string;
-  location: string;
-  priority: 'high' | 'medium' | 'low';
-  dueDate: string;
-  status: string;
-  assignedBy: string;
-  fromPM?: boolean;
-  phase?: string;
+interface EvidenceFile {
+  name: string;
+  url: string;
+  type: string;
+}
+
+function getWeekInfo() {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diff);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const fmt = (d: Date) =>
+    d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const weekNum = Math.ceil(
+    (((now.getTime() - new Date(now.getFullYear(), 0, 1).getTime()) / 86400000) + 1) / 7
+  );
+  return {
+    weekStart: monday.toISOString().split('T')[0],
+    label: `Week ${weekNum} — ${fmt(monday)}–${fmt(sunday)}`,
+    dueLabel: `Sunday, ${fmt(sunday)}`,
+  };
 }
 
 export function FieldOperations() {
-  const [selectedTask, setSelectedTask] = useState<MyTask | null>(null);
+  const { user, profile } = useAuth();
+
+  const [activeTasks, setActiveTasks] = useState<TaskWithRelations[]>([]);
+  const [completedTasks, setCompletedTasks] = useState<TaskWithRelations[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(true);
+
+  const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
   const [activeView, setActiveView] = useState<'tasks' | 'report'>('tasks');
-  const [reportSubmitted, setReportSubmitted] = useState(false);
-  const [pmAssignedTasks, setPmAssignedTasks] = useState<AssignedTask[]>([]);
-  const [taskDoneStatus, setTaskDoneStatus] = useState<Record<string, boolean>>({});
-  const [taskEvidence, setTaskEvidence] = useState<Record<string, string[]>>({});
+
+  // Evidence per task (in task detail modal)
+  const [evidenceByTask, setEvidenceByTask] = useState<Record<string, EvidenceFile[]>>({});
+  const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+
+  // Task status update
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+
+  // Weekly report state
+  const [reportDoneStatus, setReportDoneStatus] = useState<Record<string, boolean>>({});
+  const [reportEvidence, setReportEvidence] = useState<Record<string, string[]>>({});
   const [hoursWorked, setHoursWorked] = useState('');
   const [incidentNotes, setIncidentNotes] = useState('');
+  const [submittingReport, setSubmittingReport] = useState(false);
+  const [reportSubmitted, setReportSubmitted] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const activeUploadTaskId = useRef<string | null>(null);
+
+  const weekInfo = getWeekInfo();
+
+  const fetchTasks = useCallback(async () => {
+    if (!user) return;
+    setLoadingTasks(true);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const [{ data: active }, { data: done }] = await Promise.all([
+      supabase
+        .from('tasks')
+        .select('*, project:projects(name), phase:phases(name)')
+        .eq('assigned_to', user.id)
+        .in('status', ['pending', 'in-progress', 'blocked'])
+        .order('created_at'),
+      supabase
+        .from('tasks')
+        .select('*, project:projects(name), phase:phases(name)')
+        .eq('assigned_to', user.id)
+        .eq('status', 'done')
+        .gte('assigned_at', today.toISOString())
+        .order('assigned_at', { ascending: false }),
+    ]);
+
+    setActiveTasks((active as TaskWithRelations[]) ?? []);
+    setCompletedTasks((done as TaskWithRelations[]) ?? []);
+    setLoadingTasks(false);
+  }, [user]);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('field_assigned_tasks');
-      if (stored) {
-        const parsed: AssignedTask[] = JSON.parse(stored);
-        setPmAssignedTasks(parsed.filter((t) => t.assignedTo === 'Robert Lee'));
+    fetchTasks();
+  }, [fetchTasks]);
+
+  const updateTaskStatus = async (taskId: string, status: Task['status']) => {
+    setUpdatingStatus(taskId);
+    await supabase.from('tasks').update({ status }).eq('id', taskId);
+    setUpdatingStatus(null);
+
+    if (status === 'done') {
+      const task = activeTasks.find(t => t.id === taskId);
+      if (task) {
+        setActiveTasks(prev => prev.filter(t => t.id !== taskId));
+        setCompletedTasks(prev => [{ ...task, status: 'done' }, ...prev]);
       }
-    } catch (_) {}
-  }, []);
+      if (selectedTask?.id === taskId) setSelectedTask(prev => prev ? { ...prev, status: 'done' } : prev);
+    } else {
+      setActiveTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t));
+      if (selectedTask?.id === taskId) setSelectedTask(prev => prev ? { ...prev, status } : prev);
+    }
+  };
 
-  const staticTasks: MyTask[] = [
-    {
-      id: 'TSK-4521',
-      title: 'Install electrical wiring — Floor 3',
-      project: 'Oakwood Tower',
-      location: 'Site A - Floor 3',
-      priority: 'high',
-      dueDate: 'Today 3:00 PM',
-      status: 'in-progress',
-      assignedBy: 'David Park',
-    },
-    {
-      id: 'TSK-4520',
-      title: 'HVAC unit inspection',
-      project: 'Riverside Plaza',
-      location: 'Building B - Roof',
-      priority: 'medium',
-      dueDate: 'Today 5:00 PM',
-      status: 'pending',
-      assignedBy: 'Jennifer Kim',
-    },
-    {
-      id: 'TSK-4519',
-      title: 'Concrete pour foundation check',
-      project: 'Industrial Warehouse',
-      location: 'Site C - Zone 2',
-      priority: 'high',
-      dueDate: 'Tomorrow 8:00 AM',
-      status: 'pending',
-      assignedBy: 'David Park',
-    },
-  ];
+  const triggerFileUpload = (taskId: string) => {
+    activeUploadTaskId.current = taskId;
+    fileInputRef.current?.click();
+  };
 
-  const pmTasks: MyTask[] = pmAssignedTasks.map((t) => ({
-    id: t.id,
-    title: t.name,
-    project: t.project,
-    location: t.phase,
-    priority: 'high' as const,
-    dueDate: 'This week',
-    status: 'pending',
-    assignedBy: t.assignedBy,
-    fromPM: true,
-    phase: t.phase,
-  }));
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const taskId = activeUploadTaskId.current;
+    if (!file || !taskId || !user) return;
 
-  const completedToday = [
-    { id: 'TSK-4518', title: 'Safety equipment check', project: 'Downtown Office', completedAt: '11:30 AM' },
-    { id: 'TSK-4517', title: 'Material delivery confirmation', project: 'Oakwood Tower', completedAt: '9:15 AM' },
-  ];
+    setUploadingFor(taskId);
+    const path = `${user.id}/${taskId}/${Date.now()}_${file.name}`;
+    const { error: uploadError } = await supabase.storage.from('evidence').upload(path, file);
 
-  const allWeeklyTasks = [
-    ...pmTasks,
-    ...staticTasks,
-  ];
+    if (!uploadError) {
+      const { data: { publicUrl } } = supabase.storage.from('evidence').getPublicUrl(path);
+      await supabase.from('task_evidence').insert({
+        task_id: taskId,
+        file_url: publicUrl,
+        file_name: file.name,
+        file_type: file.type,
+        uploaded_by: user.id,
+      });
+      setEvidenceByTask(prev => ({
+        ...prev,
+        [taskId]: [...(prev[taskId] ?? []), { name: file.name, url: publicUrl, type: file.type }],
+      }));
+    }
 
-  const toggleTaskDone = (taskId: string) =>
-    setTaskDoneStatus((prev) => ({ ...prev, [taskId]: !prev[taskId] }));
-
-  const addEvidence = (taskId: string, type: 'photo' | 'video') => {
-    const label = type === 'photo'
-      ? `photo_${taskId}_${Date.now()}.jpg`
-      : `video_${taskId}_${Date.now()}.mp4`;
-    setTaskEvidence((prev) => ({
-      ...prev,
-      [taskId]: [...(prev[taskId] || []), label],
-    }));
+    setUploadingFor(null);
+    e.target.value = '';
   };
 
   const removeEvidence = (taskId: string, idx: number) => {
-    setTaskEvidence((prev) => ({
+    setEvidenceByTask(prev => ({
       ...prev,
       [taskId]: prev[taskId].filter((_, i) => i !== idx),
     }));
   };
 
-  const mockSupervisorComments: Record<string, { author: string; text: string; date: string; status: 'rework' | 'approved' | 'note' }[]> = {
-    'TSK-4521': [
-      {
-        author: 'David Park',
-        text: 'Floor 3 wiring looks good on the south side. Junction box on grid C-7 needs re-checking — upload a close-up photo.',
-        date: 'May 3, 9:45 AM',
-        status: 'rework',
-      },
-    ],
+  const submitReport = async () => {
+    if (!user || !profile) return;
+    setSubmittingReport(true);
+
+    const { data: report, error } = await supabase
+      .from('weekly_reports')
+      .insert({
+        worker_id: user.id,
+        worker_name: profile.full_name,
+        week_start: weekInfo.weekStart,
+        hours_worked: hoursWorked ? parseFloat(hoursWorked) : null,
+        incident_notes: incidentNotes || null,
+        status: 'pending-review',
+      })
+      .select()
+      .single();
+
+    if (!error && report) {
+      const allReportTasks = [...activeTasks, ...completedTasks];
+      if (allReportTasks.length > 0) {
+        await supabase.from('report_task_items').insert(
+          allReportTasks.map(task => ({
+            report_id: report.id,
+            task_name: task.name,
+            done: task.status === 'done' || (reportDoneStatus[task.id] ?? false),
+            evidence_urls: reportEvidence[task.id] ?? [],
+          }))
+        );
+      }
+      setReportSubmitted(true);
+    }
+
+    setSubmittingReport(false);
+  };
+
+  const initials = profile?.full_name
+    ? profile.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+    : '?';
+
+  const priorityColors: Record<string, string> = {
+    high: 'text-red-500',
+    medium: 'text-amber-500',
+    low: 'text-neutral-400',
+  };
+
+  const statusLabel: Record<string, string> = {
+    pending: 'Pending',
+    'in-progress': 'In Progress',
+    done: 'Done',
+    blocked: 'Blocked',
   };
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-20">
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,video/*,.pdf"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
       {/* Mobile Header */}
       <div className="bg-white border-b border-neutral-200 p-4 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-3">
@@ -157,138 +241,141 @@ export function FieldOperations() {
             <h1 className="text-lg font-semibold text-neutral-900">
               {activeView === 'tasks' ? 'My Tasks' : 'Weekly Report'}
             </h1>
-            <p className="text-sm text-neutral-500">Robert Lee · Field Operations</p>
+            <p className="text-sm text-neutral-500">
+              {profile?.full_name ?? '...'} · Field Operations
+            </p>
           </div>
           <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium text-sm">
-            RL
+            {initials}
           </div>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
           <div className="bg-blue-50 rounded-lg p-3 text-center">
-            <p className="text-xl font-semibold text-blue-900">
-              {staticTasks.length + pmTasks.length}
-            </p>
+            <p className="text-xl font-semibold text-blue-900">{activeTasks.length}</p>
             <p className="text-xs text-blue-600">Active</p>
           </div>
           <div className="bg-green-50 rounded-lg p-3 text-center">
-            <p className="text-xl font-semibold text-green-900">{completedToday.length}</p>
+            <p className="text-xl font-semibold text-green-900">{completedTasks.length}</p>
             <p className="text-xs text-green-600">Done Today</p>
           </div>
           <div className="bg-orange-50 rounded-lg p-3 text-center">
             <p className="text-xl font-semibold text-orange-900">
-              {staticTasks.filter((t) => t.priority === 'high').length + pmTasks.length}
+              {activeTasks.filter(t => t.status === 'blocked').length}
             </p>
-            <p className="text-xs text-orange-600">Urgent</p>
+            <p className="text-xs text-orange-600">Blocked</p>
           </div>
         </div>
       </div>
 
-      {/* Task List View */}
+      {/* ── Task List View ── */}
       {activeView === 'tasks' && (
         <div className="p-4 space-y-3">
-
-          {/* PM-Assigned Tasks */}
-          {pmTasks.length > 0 && (
+          {loadingTasks ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+            </div>
+          ) : activeTasks.length === 0 && completedTasks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <CheckCircle2 className="w-12 h-12 text-neutral-200 mb-3" />
+              <h3 className="font-medium text-neutral-900">No tasks assigned</h3>
+              <p className="text-sm text-neutral-500 mt-1">
+                Your manager will assign tasks to you from Project Management.
+              </p>
+            </div>
+          ) : (
             <>
-              <div className="flex items-center gap-2 mt-2">
-                <FolderKanban className="w-4 h-4 text-purple-600" />
-                <h2 className="text-sm font-semibold text-purple-700 uppercase tracking-wide">
-                  From Project Management
-                </h2>
-              </div>
-              {pmTasks.map((task) => (
-                <div
-                  key={task.id}
-                  onClick={() => setSelectedTask(task)}
-                  className="bg-white rounded-xl border-2 border-purple-200 p-4 cursor-pointer"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full border-2 border-purple-300 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <FolderKanban className="w-3 h-3 text-purple-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <h3 className="font-medium text-neutral-900 text-sm">{task.title}</h3>
-                        <AlertCircle className="w-4 h-4 text-purple-500 flex-shrink-0" />
+              {activeTasks.length > 0 && (
+                <>
+                  <h2 className="text-sm font-medium text-neutral-500 uppercase tracking-wide">Active Tasks</h2>
+                  {activeTasks.map(task => (
+                    <div
+                      key={task.id}
+                      onClick={() => setSelectedTask(task)}
+                      className={`bg-white rounded-xl border p-4 cursor-pointer active:scale-[0.99] transition-transform ${
+                        task.status === 'blocked' ? 'border-red-200' : 'border-neutral-200'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                          task.status === 'in-progress' ? 'border-blue-400' :
+                          task.status === 'blocked' ? 'border-red-400' : 'border-neutral-300'
+                        }`}>
+                          {task.status === 'in-progress' && <Clock className="w-3.5 h-3.5 text-blue-500" />}
+                          {task.status === 'blocked' && <AlertCircle className="w-3.5 h-3.5 text-red-500" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <h3 className="font-medium text-neutral-900 text-sm">{task.name}</h3>
+                            {task.status === 'blocked' && (
+                              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                            )}
+                          </div>
+                          <div className="space-y-1">
+                            {task.project?.name && (
+                              <div className="flex items-center gap-2 text-xs text-neutral-500">
+                                <FileText className="w-3.5 h-3.5" />
+                                <span>{task.project.name}</span>
+                              </div>
+                            )}
+                            {task.phase?.name && (
+                              <div className="flex items-center gap-2 text-xs text-neutral-500">
+                                <MapPin className="w-3.5 h-3.5" />
+                                <span>{task.phase.name}</span>
+                              </div>
+                            )}
+                            {task.status === 'blocked' && (
+                              <p className="flex items-center gap-1 text-xs text-red-500 mt-1">
+                                <AlertCircle className="w-3 h-3" />
+                                Task is blocked
+                              </p>
+                            )}
+                          </div>
+                          <div className="mt-2 flex items-center gap-2">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                              task.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
+                              task.status === 'blocked' ? 'bg-red-100 text-red-700' :
+                              'bg-neutral-100 text-neutral-600'
+                            }`}>
+                              {statusLabel[task.status]}
+                            </span>
+                            {task.status === 'in-progress' && (
+                              <span className="text-xs text-neutral-400">Tap to update</span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-xs text-purple-700 font-medium">{task.phase}</p>
-                      <p className="text-xs text-neutral-500 mt-1">{task.project}</p>
-                      <p className="text-xs text-neutral-400 mt-2">
-                        Assigned by {task.assignedBy} · {task.dueDate}
-                      </p>
                     </div>
-                  </div>
-                </div>
-              ))}
-              <div className="border-t border-neutral-200 pt-3" />
+                  ))}
+                </>
+              )}
+
+              {completedTasks.length > 0 && (
+                <>
+                  <h2 className="text-sm font-medium text-neutral-500 uppercase tracking-wide mt-6">Completed Today</h2>
+                  {completedTasks.map(task => (
+                    <div key={task.id} className="bg-white rounded-xl border border-neutral-200 p-4 opacity-60">
+                      <div className="flex items-start gap-3">
+                        <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                          <CheckCircle2 className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-medium text-neutral-900 text-sm line-through">{task.name}</h3>
+                          {task.project?.name && (
+                            <p className="text-xs text-neutral-500 mt-1">{task.project.name}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
             </>
           )}
-
-          <h2 className="text-sm font-medium text-neutral-500 uppercase tracking-wide">
-            Today's Tasks
-          </h2>
-
-          {staticTasks.map((task) => (
-            <div
-              key={task.id}
-              onClick={() => setSelectedTask(task)}
-              className="bg-white rounded-xl border border-neutral-200 p-4 cursor-pointer active:scale-[0.99] transition-transform"
-            >
-              <div className="flex items-start gap-3">
-                <button className="w-6 h-6 rounded-full border-2 border-neutral-300 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  {task.status === 'completed' && <Check className="w-4 h-4 text-green-600" />}
-                </button>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <h3 className="font-medium text-neutral-900">{task.title}</h3>
-                    {task.priority === 'high' && (
-                      <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-sm text-neutral-600">
-                      <FileText className="w-4 h-4" />
-                      <span>{task.project}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-neutral-600">
-                      <MapPin className="w-4 h-4" />
-                      <span>{task.location}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-neutral-600">
-                      <Clock className="w-4 h-4" />
-                      <span className="font-medium">{task.dueDate}</span>
-                    </div>
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-neutral-100">
-                    <p className="text-xs text-neutral-500">Assigned by {task.assignedBy}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-
-          <h2 className="text-sm font-medium text-neutral-500 uppercase tracking-wide mt-6">
-            Completed Today
-          </h2>
-          {completedToday.map((task) => (
-            <div key={task.id} className="bg-white rounded-xl border border-neutral-200 p-4 opacity-60">
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                  <CheckCircle2 className="w-4 h-4 text-green-600" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-medium text-neutral-900 line-through">{task.title}</h3>
-                  <p className="text-sm text-neutral-600 mt-1">{task.project}</p>
-                  <p className="text-xs text-neutral-500 mt-2">Completed at {task.completedAt}</p>
-                </div>
-              </div>
-            </div>
-          ))}
         </div>
       )}
 
-      {/* Weekly Report — Template */}
+      {/* ── Weekly Report ── */}
       {activeView === 'report' && (
         <div className="p-4 space-y-4">
           {reportSubmitted ? (
@@ -298,13 +385,13 @@ export function FieldOperations() {
               </div>
               <h2 className="text-xl font-semibold text-neutral-900">Report Submitted!</h2>
               <p className="text-sm text-neutral-500 mt-2">
-                Your Week 18 report has been sent for review.
+                Your {weekInfo.label.split('—')[0].trim()} report has been sent for review.
               </p>
               <button
                 onClick={() => {
                   setReportSubmitted(false);
-                  setTaskDoneStatus({});
-                  setTaskEvidence({});
+                  setReportDoneStatus({});
+                  setReportEvidence({});
                   setHoursWorked('');
                   setIncidentNotes('');
                 }}
@@ -317,107 +404,98 @@ export function FieldOperations() {
             <>
               {/* Week banner */}
               <div className="bg-blue-50 rounded-xl p-4">
-                <p className="text-sm font-semibold text-blue-900">Week 18 — May 4–10, 2026</p>
-                <p className="text-xs text-blue-600 mt-0.5">Due: Sunday, May 10 · Fill in each task below</p>
+                <p className="text-sm font-semibold text-blue-900">{weekInfo.label}</p>
+                <p className="text-xs text-blue-600 mt-0.5">Due: {weekInfo.dueLabel} · Fill in each task below</p>
               </div>
 
-              {/* Task template checklist */}
+              {/* Task checklist */}
               <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
                 <div className="p-4 border-b border-neutral-100 bg-neutral-50">
                   <h3 className="font-semibold text-neutral-900 text-sm">This Week's Tasks</h3>
-                  <p className="text-xs text-neutral-500 mt-0.5">
-                    Mark each task done and attach photo/video evidence
-                  </p>
+                  <p className="text-xs text-neutral-500 mt-0.5">Mark each task done and attach evidence</p>
                 </div>
 
-                <div className="divide-y divide-neutral-100">
-                  {allWeeklyTasks.map((task) => {
-                    const isDone = taskDoneStatus[task.id] ?? false;
-                    const evidence = taskEvidence[task.id] ?? [];
-                    return (
-                      <div
-                        key={task.id}
-                        className={`p-4 ${isDone ? 'bg-green-50' : ''}`}
-                      >
-                        {/* Task header row */}
-                        <div className="flex items-start gap-3">
-                          <button
-                            onClick={() => toggleTaskDone(task.id)}
-                            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors ${
-                              isDone
-                                ? 'bg-green-600 border-green-600'
-                                : 'border-neutral-300'
-                            }`}
-                          >
-                            {isDone && <Check className="w-3.5 h-3.5 text-white" />}
-                          </button>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className={`text-sm font-medium ${isDone ? 'text-green-800 line-through' : 'text-neutral-900'}`}>
-                                {task.title}
-                              </p>
-                              {task.fromPM && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-full flex-shrink-0">
-                                  <FolderKanban className="w-3 h-3" />
-                                  PM
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs text-neutral-500 mt-0.5">
-                              {task.project}
-                              {task.phase ? ` · ${task.phase}` : ` · ${task.location}`}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Evidence per task */}
-                        <div className="mt-3 ml-9">
-                          <div className="flex gap-2 mb-2">
+                {loadingTasks ? (
+                  <div className="flex items-center justify-center py-10">
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                  </div>
+                ) : activeTasks.length === 0 && completedTasks.length === 0 ? (
+                  <p className="p-6 text-sm text-neutral-400 text-center">No tasks assigned this week.</p>
+                ) : (
+                  <div className="divide-y divide-neutral-100">
+                    {[...activeTasks, ...completedTasks].map(task => {
+                      const isDone = task.status === 'done' || (reportDoneStatus[task.id] ?? false);
+                      const evidence = reportEvidence[task.id] ?? [];
+                      return (
+                        <div key={task.id} className={`p-4 ${isDone ? 'bg-green-50' : ''}`}>
+                          <div className="flex items-start gap-3">
                             <button
-                              onClick={() => addEvidence(task.id, 'photo')}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700 font-medium active:scale-95 transition-transform"
+                              onClick={() => setReportDoneStatus(prev => ({ ...prev, [task.id]: !isDone }))}
+                              disabled={task.status === 'done'}
+                              className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors ${
+                                isDone ? 'bg-green-600 border-green-600' : 'border-neutral-300'
+                              }`}
+                            >
+                              {isDone && <Check className="w-3.5 h-3.5 text-white" />}
+                            </button>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className={`text-sm font-medium ${isDone ? 'text-green-800 line-through' : 'text-neutral-900'}`}>
+                                  {task.name}
+                                </p>
+                                {task.phase_id && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-full flex-shrink-0">
+                                    <FolderKanban className="w-3 h-3" />
+                                    PM
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-neutral-500 mt-0.5">
+                                {task.project?.name}
+                                {task.phase?.name ? ` · ${task.phase.name}` : ''}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Evidence per task in report */}
+                          <div className="mt-3 ml-9">
+                            <button
+                              onClick={() => {
+                                activeUploadTaskId.current = `report_${task.id}`;
+                                fileInputRef.current?.click();
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700 font-medium"
                             >
                               <Camera className="w-3.5 h-3.5" />
-                              Photo
+                              Add Evidence
                             </button>
-                            <button
-                              onClick={() => addEvidence(task.id, 'video')}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-lg text-xs text-purple-700 font-medium active:scale-95 transition-transform"
-                            >
-                              <Video className="w-3.5 h-3.5" />
-                              Video
-                            </button>
-                          </div>
-                          {evidence.length > 0 && (
-                            <div className="space-y-1">
-                              {evidence.map((file, idx) => (
-                                <div
-                                  key={idx}
-                                  className="flex items-center justify-between bg-white border border-neutral-200 rounded-lg px-3 py-1.5"
-                                >
-                                  <div className="flex items-center gap-2 text-xs text-neutral-700">
-                                    {file.endsWith('.jpg') ? (
-                                      <ImageIcon className="w-3.5 h-3.5 text-blue-500" />
-                                    ) : (
-                                      <Video className="w-3.5 h-3.5 text-purple-500" />
-                                    )}
-                                    <span>{file}</span>
+                            {evidence.length > 0 && (
+                              <div className="space-y-1 mt-2">
+                                {evidence.map((url, idx) => (
+                                  <div key={idx} className="flex items-center justify-between bg-white border border-neutral-200 rounded-lg px-3 py-1.5">
+                                    <div className="flex items-center gap-2 text-xs text-neutral-700">
+                                      <Paperclip className="w-3.5 h-3.5 text-blue-500" />
+                                      <span className="truncate max-w-[180px]">{url.split('/').pop()}</span>
+                                    </div>
+                                    <button onClick={() => setReportEvidence(prev => ({
+                                      ...prev,
+                                      [task.id]: prev[task.id].filter((_, i) => i !== idx),
+                                    }))}>
+                                      <X className="w-3.5 h-3.5 text-neutral-400" />
+                                    </button>
                                   </div>
-                                  <button onClick={() => removeEvidence(task.id, idx)}>
-                                    <X className="w-3.5 h-3.5 text-neutral-400" />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
-              {/* Hours worked */}
+              {/* Hours */}
               <div className="bg-white rounded-xl border border-neutral-200 p-4">
                 <label className="block text-sm font-semibold text-neutral-900 mb-2">
                   Total Hours Worked This Week
@@ -426,7 +504,7 @@ export function FieldOperations() {
                   type="number"
                   placeholder="e.g. 40"
                   value={hoursWorked}
-                  onChange={(e) => setHoursWorked(e.target.value)}
+                  onChange={e => setHoursWorked(e.target.value)}
                   className="w-full px-4 py-3 border border-neutral-200 rounded-xl text-2xl font-semibold text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -440,15 +518,17 @@ export function FieldOperations() {
                   rows={3}
                   placeholder="Describe any safety incidents, delays, or blockers this week..."
                   value={incidentNotes}
-                  onChange={(e) => setIncidentNotes(e.target.value)}
+                  onChange={e => setIncidentNotes(e.target.value)}
                   className="w-full px-3 py-3 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
               </div>
 
               <button
-                onClick={() => setReportSubmitted(true)}
-                className="w-full py-4 bg-blue-600 text-white rounded-xl font-semibold text-base active:scale-[0.98] transition-transform"
+                onClick={submitReport}
+                disabled={submittingReport}
+                className="w-full py-4 bg-blue-600 text-white rounded-xl font-semibold text-base active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
               >
+                {submittingReport && <Loader2 className="w-5 h-5 animate-spin" />}
                 Submit Weekly Report
               </button>
             </>
@@ -478,158 +558,147 @@ export function FieldOperations() {
         </button>
       </div>
 
-      {/* Task Detail Modal */}
+      {/* ── Task Detail Modal ── */}
       {selectedTask && (
         <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
           <div className="bg-white border-b border-neutral-200 p-4 sticky top-0">
-            <button
-              onClick={() => setSelectedTask(null)}
-              className="text-blue-600 font-medium mb-3"
-            >
+            <button onClick={() => setSelectedTask(null)} className="text-blue-600 font-medium mb-3">
               ← Back
             </button>
             <div className="flex items-start justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-neutral-900">{selectedTask.title}</h2>
-                <p className="text-sm text-neutral-500 mt-1">{selectedTask.id}</p>
+                <h2 className="text-lg font-semibold text-neutral-900">{selectedTask.name}</h2>
+                <p className="text-sm text-neutral-500 mt-1">
+                  {selectedTask.project?.name ?? 'Unknown project'}
+                </p>
               </div>
-              {selectedTask.fromPM && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-purple-100 text-purple-700 rounded-full">
-                  <FolderKanban className="w-3 h-3" />
-                  From PM
-                </span>
-              )}
+              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                selectedTask.status === 'done' ? 'bg-green-100 text-green-700' :
+                selectedTask.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
+                selectedTask.status === 'blocked' ? 'bg-red-100 text-red-700' :
+                'bg-neutral-100 text-neutral-600'
+              }`}>
+                {statusLabel[selectedTask.status]}
+              </span>
             </div>
           </div>
 
           <div className="p-4 space-y-6">
             {/* Task info */}
             <div className="bg-neutral-50 rounded-xl p-4 space-y-3">
-              <div className="flex items-center gap-2 text-sm">
-                <FileText className="w-4 h-4 text-neutral-500" />
-                <span className="text-neutral-900">{selectedTask.project}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <MapPin className="w-4 h-4 text-neutral-500" />
-                <span className="text-neutral-900">{selectedTask.location}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Clock className="w-4 h-4 text-neutral-500" />
-                <span className="font-medium text-neutral-900">{selectedTask.dueDate}</span>
-              </div>
+              {selectedTask.project?.name && (
+                <div className="flex items-center gap-2 text-sm">
+                  <FileText className="w-4 h-4 text-neutral-500" />
+                  <span className="text-neutral-900">{selectedTask.project.name}</span>
+                </div>
+              )}
+              {selectedTask.phase?.name && (
+                <div className="flex items-center gap-2 text-sm">
+                  <MapPin className="w-4 h-4 text-neutral-500" />
+                  <span className="text-neutral-900">{selectedTask.phase.name}</span>
+                </div>
+              )}
+              {selectedTask.notes && (
+                <p className="text-sm text-neutral-600">{selectedTask.notes}</p>
+              )}
             </div>
 
-            {/* Supervisor comments */}
-            {mockSupervisorComments[selectedTask.id] && (
-              <div>
-                <h3 className="font-medium text-neutral-900 mb-3 flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-orange-500" />
-                  Supervisor Review
-                </h3>
-                {mockSupervisorComments[selectedTask.id].map((comment, idx) => (
-                  <div
-                    key={idx}
-                    className={`rounded-xl p-4 border ${
-                      comment.status === 'rework'
-                        ? 'bg-orange-50 border-orange-200'
-                        : 'bg-green-50 border-green-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-semibold text-neutral-900">{comment.author}</span>
-                      <div className="flex items-center gap-2">
-                        {comment.status === 'rework' && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded-full">
-                            <RotateCcw className="w-3 h-3" />
-                            Rework Needed
-                          </span>
-                        )}
-                        <span className="text-xs text-neutral-500">{comment.date}</span>
-                      </div>
-                    </div>
-                    <p className="text-sm text-neutral-700">{comment.text}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Quick Actions */}
+            {/* Upload Evidence */}
             <div>
-              <h3 className="font-medium text-neutral-900 mb-3">Update Task</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <button className="flex flex-col items-center gap-2 p-6 bg-white border-2 border-neutral-200 rounded-xl active:scale-95 transition-transform">
-                  <Camera className="w-8 h-8 text-blue-600" />
-                  <span className="text-sm font-medium text-neutral-900">Take Photo</span>
+              <h3 className="font-medium text-neutral-900 mb-3">Evidence</h3>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <button
+                  onClick={() => triggerFileUpload(selectedTask.id)}
+                  disabled={uploadingFor === selectedTask.id}
+                  className="flex flex-col items-center gap-2 p-5 bg-white border-2 border-neutral-200 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
+                >
+                  {uploadingFor === selectedTask.id ? (
+                    <Loader2 className="w-7 h-7 text-blue-600 animate-spin" />
+                  ) : (
+                    <Camera className="w-7 h-7 text-blue-600" />
+                  )}
+                  <span className="text-sm font-medium text-neutral-900">Photo / Video</span>
                 </button>
-                <button className="flex flex-col items-center gap-2 p-6 bg-white border-2 border-neutral-200 rounded-xl active:scale-95 transition-transform">
-                  <Video className="w-8 h-8 text-purple-600" />
-                  <span className="text-sm font-medium text-neutral-900">Record Video</span>
-                </button>
-                <button className="flex flex-col items-center gap-2 p-6 bg-white border-2 border-neutral-200 rounded-xl active:scale-95 transition-transform">
-                  <Mic className="w-8 h-8 text-green-600" />
-                  <span className="text-sm font-medium text-neutral-900">Voice Note</span>
-                </button>
-                <button className="flex flex-col items-center gap-2 p-6 bg-white border-2 border-neutral-200 rounded-xl active:scale-95 transition-transform">
-                  <Upload className="w-8 h-8 text-orange-600" />
+                <button
+                  onClick={() => triggerFileUpload(selectedTask.id)}
+                  disabled={uploadingFor === selectedTask.id}
+                  className="flex flex-col items-center gap-2 p-5 bg-white border-2 border-neutral-200 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
+                >
+                  <Upload className="w-7 h-7 text-orange-600" />
                   <span className="text-sm font-medium text-neutral-900">Upload File</span>
                 </button>
               </div>
-            </div>
 
-            {/* Note */}
-            <div>
-              <h3 className="font-medium text-neutral-900 mb-3">Add Note</h3>
-              <textarea
-                rows={4}
-                placeholder="Quick update or notes..."
-                className="w-full px-4 py-3 border border-neutral-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            {/* Evidence grid */}
-            <div>
-              <h3 className="font-medium text-neutral-900 mb-3">Evidence</h3>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="aspect-square bg-neutral-100 rounded-lg flex items-center justify-center">
-                  <ImageIcon className="w-6 h-6 text-neutral-400" />
+              {(evidenceByTask[selectedTask.id] ?? []).length > 0 ? (
+                <div className="space-y-2">
+                  {evidenceByTask[selectedTask.id].map((file, idx) => (
+                    <div key={idx} className="flex items-center justify-between bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2 text-sm text-neutral-700 min-w-0">
+                        {file.type.startsWith('image/') ? (
+                          <ImageIcon className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                        ) : file.type.startsWith('video/') ? (
+                          <Video className="w-4 h-4 text-purple-500 flex-shrink-0" />
+                        ) : (
+                          <Paperclip className="w-4 h-4 text-neutral-500 flex-shrink-0" />
+                        )}
+                        <span className="truncate">{file.name}</span>
+                      </div>
+                      <button onClick={() => removeEvidence(selectedTask.id, idx)}>
+                        <X className="w-4 h-4 text-neutral-400" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-                <div className="aspect-square bg-neutral-100 rounded-lg flex items-center justify-center">
-                  <ImageIcon className="w-6 h-6 text-neutral-400" />
-                </div>
-                <button className="aspect-square border-2 border-dashed border-neutral-300 rounded-lg flex items-center justify-center active:scale-95 transition-transform">
-                  <Camera className="w-6 h-6 text-neutral-400" />
-                </button>
-              </div>
+              ) : (
+                <p className="text-sm text-neutral-400 text-center py-3">No evidence uploaded yet.</p>
+              )}
             </div>
 
             {/* Status Update */}
-            <div>
-              <h3 className="font-medium text-neutral-900 mb-3">Update Status</h3>
-              <div className="space-y-2">
-                <button className="w-full p-4 bg-blue-50 border-2 border-blue-200 rounded-xl text-left active:scale-[0.98] transition-transform">
-                  <div className="flex items-center gap-3">
-                    <Clock className="w-5 h-5 text-blue-600" />
-                    <span className="font-medium text-blue-900">Mark as In Progress</span>
-                  </div>
-                </button>
-                <button className="w-full p-4 bg-green-50 border-2 border-green-200 rounded-xl text-left active:scale-[0.98] transition-transform">
-                  <div className="flex items-center gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-green-600" />
-                    <span className="font-medium text-green-900">Mark as Completed</span>
-                  </div>
-                </button>
-                <button className="w-full p-4 bg-red-50 border-2 border-red-200 rounded-xl text-left active:scale-[0.98] transition-transform">
-                  <div className="flex items-center gap-3">
-                    <AlertCircle className="w-5 h-5 text-red-600" />
-                    <span className="font-medium text-red-900">Report Issue</span>
-                  </div>
-                </button>
+            {selectedTask.status !== 'done' && selectedTask.status !== 'blocked' && (
+              <div>
+                <h3 className="font-medium text-neutral-900 mb-3">Update Status</h3>
+                <div className="space-y-2">
+                  {selectedTask.status === 'pending' && (
+                    <button
+                      onClick={() => updateTaskStatus(selectedTask.id, 'in-progress')}
+                      disabled={updatingStatus === selectedTask.id}
+                      className="w-full p-4 bg-blue-50 border-2 border-blue-200 rounded-xl text-left active:scale-[0.98] transition-transform disabled:opacity-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        {updatingStatus === selectedTask.id ? (
+                          <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                        ) : (
+                          <Clock className="w-5 h-5 text-blue-600" />
+                        )}
+                        <span className="font-medium text-blue-900">Mark as In Progress</span>
+                      </div>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => updateTaskStatus(selectedTask.id, 'done')}
+                    disabled={updatingStatus === selectedTask.id}
+                    className="w-full p-4 bg-green-50 border-2 border-green-200 rounded-xl text-left active:scale-[0.98] transition-transform disabled:opacity-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      {updatingStatus === selectedTask.id ? (
+                        <Loader2 className="w-5 h-5 text-green-600 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-5 h-5 text-green-600" />
+                      )}
+                      <span className="font-medium text-green-900">Mark as Completed</span>
+                    </div>
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
-            <button className="w-full py-4 bg-blue-600 text-white rounded-xl font-medium text-lg active:scale-[0.98] transition-transform">
-              Submit Update
-            </button>
+            {selectedTask.status === 'done' && (
+              <div className="flex items-center justify-center gap-2 py-4 text-green-600">
+                <CheckCircle2 className="w-5 h-5" />
+                <span className="font-medium">Task completed</span>
+              </div>
+            )}
           </div>
         </div>
       )}

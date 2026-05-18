@@ -9,21 +9,27 @@ import {
   Search,
   Bell,
   Menu,
-  X,
   ChevronLeft,
   Smartphone,
+  LogOut,
 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 export function RootLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { profile, signOut } = useAuth();
+
+  const initials = profile?.full_name
+    ? profile.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    : '?';
 
   const navigation = [
-    { name: 'Dashboard', to: '/', icon: LayoutDashboard },
-    { name: 'Brokerage Operations', to: '/brokerage', icon: Building2 },
-    { name: 'Sales & Marketing', to: '/sales', icon: TrendingUp },
-    { name: 'Project Management', to: '/projects', icon: FolderKanban },
-    { name: 'Workforce KPI', to: '/workforce', icon: Users },
-    { name: 'Field Operations', to: '/field', icon: Smartphone },
+    { name: 'Dashboard', to: '/app', icon: LayoutDashboard },
+    { name: 'Brokerage Operations', to: '/app/brokerage', icon: Building2 },
+    { name: 'Sales & Marketing', to: '/app/sales', icon: TrendingUp },
+    { name: 'Project Management', to: '/app/projects', icon: FolderKanban },
+    { name: 'Workforce KPI', to: '/app/workforce', icon: Users },
+    { name: 'Field Operations', to: '/app/field', icon: Smartphone },
   ];
 
   return (
@@ -72,19 +78,24 @@ export function RootLayout() {
         </nav>
 
         {/* User Section */}
-        {!sidebarCollapsed && (
-          <div className="p-4 border-t border-neutral-200">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium">
-                JD
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-neutral-900 truncate">John Doe</div>
-                <div className="text-xs text-neutral-500 truncate">Operations Manager</div>
-              </div>
+        <div className="p-4 border-t border-neutral-200">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
+              {initials}
             </div>
+            {!sidebarCollapsed && (
+              <>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-neutral-900 truncate">{profile?.full_name ?? '...'}</div>
+                  <div className="text-xs text-neutral-500 truncate capitalize">{profile?.role?.replace('_', ' ') ?? ''}</div>
+                </div>
+                <button onClick={signOut} className="p-1.5 hover:bg-neutral-100 rounded-md transition-colors" title="Sign out">
+                  <LogOut className="w-4 h-4 text-neutral-400" />
+                </button>
+              </>
+            )}
           </div>
-        )}
+        </div>
       </aside>
 
       {/* Main Content */}
