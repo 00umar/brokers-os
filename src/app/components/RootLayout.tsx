@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Outlet, NavLink } from 'react-router';
+import { Outlet, NavLink, Link } from 'react-router';
 import {
   LayoutDashboard,
   Building2,
@@ -43,10 +43,10 @@ export function RootLayout() {
         {/* Logo */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-neutral-200">
           {!sidebarCollapsed && (
-            <div className="flex items-center gap-2">
+            <Link to="/" className="flex items-center gap-2 hover:opacity-75 transition-opacity">
               <Building2 className="w-6 h-6 text-blue-600" />
               <span className="font-semibold text-neutral-900">RealOps CRM</span>
-            </div>
+            </Link>
           )}
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}

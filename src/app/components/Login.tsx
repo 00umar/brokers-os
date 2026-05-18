@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { useAuth } from '../../contexts/AuthContext'
 
 export default function Login() {
@@ -21,9 +22,9 @@ export default function Login() {
     <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600 mb-4">
+          <Link to="/" className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600 mb-4">
             <span className="text-white font-bold text-xl">7</span>
-          </div>
+          </Link>
           <h1 className="text-white text-2xl font-semibold">765 Operations</h1>
           <p className="text-gray-400 text-sm mt-1">Sign in to your account</p>
         </div>
@@ -71,6 +72,11 @@ export default function Login() {
         <p className="text-center text-gray-600 text-xs mt-6">
           Contact your administrator to get access
         </p>
+        <div className="text-center mt-4">
+          <Link to="/" className="text-gray-600 hover:text-gray-400 text-xs transition-colors">
+            ← Back to Home
+          </Link>
+        </div>
       </div>
     </div>
   )
