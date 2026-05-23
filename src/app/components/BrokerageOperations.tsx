@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import type { Client, Deal, BrokerNote, IntakeRequest, Listing, DealStage } from '../../lib/database.types';
+import type { Client, Deal, BrokerNote, IntakeRequest, Listing, DealStage, SalesTask } from '../../lib/database.types';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -87,6 +87,12 @@ export function BrokerageOperations() {
   const [dealNote, setDealNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [changingStage, setChangingStage] = useState(false);
+
+  // Sales support
+  const [dealSalesTasks, setDealSalesTasks] = useState<SalesTask[]>([]);
+  const [showSalesRequest, setShowSalesRequest] = useState(false);
+  const [salesRequestForm, setSalesRequestForm] = useState({ action: '', assigned_to_name: '', due_date: '' });
+  const [savingSalesRequest, setSavingSalesRequest] = useState(false);
 
   // Client profile panel
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -177,6 +183,12 @@ export function BrokerageOperations() {
       .from('broker_notes').select('*').eq('deal_id', deal.id)
       .order('created_at', { ascending: false });
     setDealNotes(data ?? []);
+    const { data: tasks } = await supabase
+      .from('sales_tasks').select('*').eq('deal_id', deal.id)
+      .order('created_at', { ascending: false });
+    setDealSalesTasks((tasks as SalesTask[]) ?? []);
+    setShowSalesRequest(false);
+    setSalesRequestForm({ action: '', assigned_to_name: '', due_date: '' });
   }
 
   async function changeStage(stage: DealStage) {
@@ -224,6 +236,25 @@ export function BrokerageOperations() {
     if (data) setDealNotes(p => [data, ...p]);
     setDealNote('');
     setSavingNote(false);
+  }
+
+  async function assignToSales() {
+    if (!selectedDeal || !salesRequestForm.action.trim()) return;
+    setSavingSalesRequest(true);
+    const { data } = await supabase.from('sales_tasks').insert({
+      deal_id: selectedDeal.id,
+      subject: selectedDeal.title,
+      action: salesRequestForm.action.trim(),
+      assigned_to_name: salesRequestForm.assigned_to_name || undefined,
+      due_date: salesRequestForm.due_date || undefined,
+      status: 'pending',
+    }).select().single();
+    if (data) {
+      setDealSalesTasks(p => [data as SalesTask, ...p]);
+      setSalesRequestForm({ action: '', assigned_to_name: '', due_date: '' });
+      setShowSalesRequest(false);
+    }
+    setSavingSalesRequest(false);
   }
 
   // ── Client handlers ───────────────────────────────────────────────────────
@@ -1059,6 +1090,96 @@ export function BrokerageOperations() {
                 >
                   {selectedDeal.payment_status === 'paid' ? '✓ Paid — Mark Pending' : 'Mark as Paid'}
                 </button>
+              </div>
+
+              {/* Sales Support */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">Sales Support</p>
+                  <button
+                    onClick={() => setShowSalesRequest(!showSalesRequest)}
+                    className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    + Assign Task
+                  </button>
+                </div>
+
+                {dealSalesTasks.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                    {dealSalesTasks.map(task => (
+                      <div key={task.id} className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm text-blue-900">{task.action}</p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
+                            task.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {task.status}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-blue-600">
+                          {task.assigned_to_name && <span>→ {task.assigned_to_name}</span>}
+                          {task.due_date && (
+                            <span>Due: {new Date(task.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {dealSalesTasks.length === 0 && !showSalesRequest && (
+                  <p className="text-sm text-neutral-400 italic mb-1">No sales tasks yet.</p>
+                )}
+
+                {showSalesRequest && (
+                  <div className="bg-neutral-50 rounded-xl p-4 space-y-3 border border-neutral-200 mb-2">
+                    <div>
+                      <label className="block text-xs text-neutral-500 mb-1">What needs to be done? *</label>
+                      <input
+                        value={salesRequestForm.action}
+                        onChange={e => setSalesRequestForm(f => ({ ...f, action: e.target.value }))}
+                        placeholder="e.g. Call client to re-engage, Send property brochure..."
+                        className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-neutral-500 mb-1">Assign to</label>
+                        <input
+                          value={salesRequestForm.assigned_to_name}
+                          onChange={e => setSalesRequestForm(f => ({ ...f, assigned_to_name: e.target.value }))}
+                          placeholder="Sales team member"
+                          className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-neutral-500 mb-1">Due date</label>
+                        <input
+                          type="date"
+                          value={salesRequestForm.due_date}
+                          onChange={e => setSalesRequestForm(f => ({ ...f, due_date: e.target.value }))}
+                          className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowSalesRequest(false)}
+                        className="flex-1 px-3 py-2 border border-neutral-200 rounded-lg text-sm hover:bg-neutral-100 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={assignToSales}
+                        disabled={savingSalesRequest || !salesRequestForm.action.trim()}
+                        className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {savingSalesRequest ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                        Assign Task
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Notes */}

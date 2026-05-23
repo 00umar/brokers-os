@@ -147,6 +147,24 @@ create table if not exists report_task_items (
   created_at timestamptz default now()
 );
 
+-- Property listings (shown on public home page and listings page)
+create table if not exists listings (
+  id uuid default gen_random_uuid() primary key,
+  title text not null,
+  description text,
+  price numeric,
+  price_label text,
+  location text not null,
+  property_type text,
+  bedrooms integer,
+  bathrooms integer,
+  size_sqm numeric,
+  image_url text,
+  is_featured boolean default false,
+  status text default 'active' check (status in ('active', 'sold', 'pending')),
+  created_at timestamptz default now()
+);
+
 -- Leads (sales & marketing)
 create table if not exists leads (
   id uuid default gen_random_uuid() primary key,
@@ -163,10 +181,24 @@ create table if not exists leads (
   created_at timestamptz default now()
 );
 
+-- Sales tasks (created from deals or leads, appear in Sales & Marketing follow-ups)
+create table if not exists sales_tasks (
+  id uuid default gen_random_uuid() primary key,
+  deal_id uuid references deals(id) on delete set null,
+  lead_id uuid references leads(id) on delete set null,
+  subject text not null,
+  action text not null,
+  assigned_to_name text,
+  due_date date,
+  status text default 'pending' check (status in ('pending', 'completed')),
+  created_at timestamptz default now()
+);
+
 -- ============================================================
 -- Row Level Security
 -- ============================================================
 
+alter table listings enable row level security;
 alter table profiles enable row level security;
 alter table clients enable row level security;
 alter table deals enable row level security;
@@ -199,6 +231,14 @@ create policy "Auth full access" on task_evidence for all using (auth.role() = '
 create policy "Auth full access" on weekly_reports for all using (auth.role() = 'authenticated');
 create policy "Auth full access" on report_task_items for all using (auth.role() = 'authenticated');
 create policy "Auth full access" on leads for all using (auth.role() = 'authenticated');
+alter table sales_tasks enable row level security;
+create policy "Auth full access" on sales_tasks for all using (auth.role() = 'authenticated');
+
+-- Listings: anyone can read, only authenticated users can write
+create policy "Public can view listings" on listings
+  for select using (true);
+create policy "Auth full access" on listings
+  for all using (auth.role() = 'authenticated');
 
 -- Intake requests: authenticated users can manage, anyone can submit
 create policy "Auth full access" on intake_requests for all using (auth.role() = 'authenticated');

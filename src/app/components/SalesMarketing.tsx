@@ -1,262 +1,228 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
+import type { Lead, SalesTask } from '../../lib/database.types';
 import {
-  Plus,
-  Search,
-  Filter,
-  Phone,
-  Mail,
-  Building2,
-  Calendar,
-  MoreVertical,
-  Users,
-  Activity,
-  Clock,
-  CheckCircle2,
-  X,
-  Handshake,
-  FileText,
-  Bell,
+  Plus, Search, Filter, Phone, Mail, Building2, Calendar,
+  MoreVertical, Users, Clock, CheckCircle2, X, Handshake,
+  FileText, Bell, Loader2, ArrowUpRight, Activity,
 } from 'lucide-react';
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const LEAD_STATUS_COLORS: Record<string, string> = {
+  new: 'bg-gray-100 text-gray-700',
+  contacted: 'bg-blue-100 text-blue-700',
+  qualified: 'bg-green-100 text-green-700',
+  converted: 'bg-emerald-100 text-emerald-700',
+  lost: 'bg-red-100 text-red-700',
+};
+
+const LEAD_TYPES = ['Developer', 'Investor', 'Contractor', 'Agency', 'Corporate', 'Individual'];
+const LEAD_SOURCES = ['Referral', 'Cold Outreach', 'LinkedIn', 'Trade Show', 'Website', 'Walk-in'];
+const LEAD_STATUSES: Lead['status'][] = ['new', 'contacted', 'qualified', 'converted', 'lost'];
+
+const PARTNER_STATUS_COLORS: Record<string, string> = {
+  Active: 'bg-green-100 text-green-700',
+  Negotiating: 'bg-orange-100 text-orange-700',
+  Inactive: 'bg-gray-100 text-gray-700',
+};
+
+const ACTIVITY_CONFIG: Record<string, { icon: any; color: string }> = {
+  call: { icon: Phone, color: 'bg-blue-50 text-blue-600' },
+  email: { icon: Mail, color: 'bg-green-50 text-green-600' },
+  meeting: { icon: Calendar, color: 'bg-purple-50 text-purple-600' },
+  proposal: { icon: FileText, color: 'bg-orange-50 text-orange-600' },
+  'site-visit': { icon: Building2, color: 'bg-yellow-50 text-yellow-700' },
+};
+
+const TABS = [
+  { id: 'leads', label: 'Business Leads' },
+  { id: 'followups', label: 'Follow-ups' },
+  { id: 'partnerships', label: 'Partnerships' },
+  { id: 'activity', label: 'Activity Log' },
+];
+
+// Static until DB tables are added
+const PARTNERSHIPS = [
+  { id: 'PAR-012', name: 'BuildTech Solutions', contact: 'Femi Oladele', email: 'femi@buildtech.ng', type: 'Technology Partner', status: 'Active', since: 'Jan 2025', value: 'Software referrals', notes: 'Mutual referral agreement for CRM clients' },
+  { id: 'PAR-011', name: 'LegalEdge Solicitors', contact: 'Aisha Suleiman', email: 'aisha@legaledge.com', type: 'Legal Partner', status: 'Active', since: 'Mar 2025', value: 'Property legal services', notes: 'Handles all client property documentation' },
+  { id: 'PAR-010', name: 'First Trust Bank', contact: 'Chidi Eze', email: 'chidi@firsttrust.ng', type: 'Finance Partner', status: 'Negotiating', since: 'Prospect', value: 'Mortgage referrals', notes: 'Discussing mortgage referral commission structure' },
+];
+
+const ACTIVITIES = [
+  { id: 'ACT-220', type: 'call', user: 'Sarah Chen', userCategory: 'Office Staff', lead: 'Jamil Builders Ltd', description: 'Discovery call — confirmed budget and timeline', timestamp: '2 hours ago' },
+  { id: 'ACT-219', type: 'email', user: 'Mike Johnson', userCategory: 'Office Staff', lead: 'Verdant Construction', description: 'Sent introduction email with company profile', timestamp: '5 hours ago' },
+  { id: 'ACT-218', type: 'meeting', user: 'Emily Davis', userCategory: 'Office Staff', lead: 'Prime Investors Group', description: 'In-person meeting at client office', timestamp: '1 day ago' },
+  { id: 'ACT-217', type: 'proposal', user: 'Sarah Chen', userCategory: 'Office Staff', lead: 'Apex Estate Agency', description: 'Submitted service proposal document', timestamp: '1 day ago' },
+];
+
+const emptyLeadForm = {
+  name: '', contact_name: '', email: '', phone: '',
+  source: 'Referral', notes: '', follow_up_date: '',
+};
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export function SalesMarketing() {
   const [activeTab, setActiveTab] = useState('leads');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Data
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [salesTasks, setSalesTasks] = useState<SalesTask[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Add lead
   const [showAddLead, setShowAddLead] = useState(false);
-  const [leadType, setLeadType] = useState('');
+  const [addLeadForm, setAddLeadForm] = useState({ ...emptyLeadForm });
+  const [addLeadType, setAddLeadType] = useState('');
+  const [savingLead, setSavingLead] = useState(false);
+
+  // Status dropdown
+  const [statusMenuId, setStatusMenuId] = useState<string | null>(null);
+
+  // Convert to deal
+  const [convertingLead, setConvertingLead] = useState<Lead | null>(null);
+  const [convertClientType, setConvertClientType] = useState<'buyer' | 'seller' | 'investor'>('buyer');
+  const [convertDealTitle, setConvertDealTitle] = useState('');
+  const [converting, setConverting] = useState(false);
+  const [convertSuccess, setConvertSuccess] = useState(false);
+
+  // Follow-ups
+  const [followUpFilter, setFollowUpFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchLeads();
+    fetchSalesTasks();
+  }, []);
+
+  // ── Fetchers ──────────────────────────────────────────────────────────────
+
+  async function fetchLeads() {
+    setLoading(true);
+    const { data } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
+    setLeads((data as Lead[]) ?? []);
+    setLoading(false);
+  }
+
+  async function fetchSalesTasks() {
+    const { data } = await supabase.from('sales_tasks').select('*').order('created_at', { ascending: false });
+    setSalesTasks((data as SalesTask[]) ?? []);
+  }
+
+  // ── Lead handlers ─────────────────────────────────────────────────────────
+
+  async function saveLead(e: React.FormEvent) {
+    e.preventDefault();
+    if (!addLeadForm.name.trim()) return;
+    setSavingLead(true);
+    const { data } = await supabase.from('leads').insert({
+      name: addLeadForm.name.trim(),
+      company: addLeadForm.name.trim(),
+      contact_name: addLeadForm.contact_name || undefined,
+      email: addLeadForm.email || undefined,
+      phone: addLeadForm.phone || undefined,
+      source: addLeadForm.source || undefined,
+      lead_type: addLeadType || undefined,
+      notes: addLeadForm.notes || undefined,
+      follow_up_date: addLeadForm.follow_up_date || undefined,
+      status: 'new',
+    }).select().single();
+    if (data) setLeads(p => [data as Lead, ...p]);
+    setShowAddLead(false);
+    setAddLeadForm({ ...emptyLeadForm });
+    setAddLeadType('');
+    setSavingLead(false);
+  }
+
+  async function updateLeadStatus(id: string, status: Lead['status']) {
+    await supabase.from('leads').update({ status }).eq('id', id);
+    setLeads(p => p.map(l => l.id === id ? { ...l, status } : l));
+    setStatusMenuId(null);
+  }
+
+  // ── Convert to deal ───────────────────────────────────────────────────────
+
+  function openConvert(lead: Lead) {
+    setConvertingLead(lead);
+    setConvertClientType('buyer');
+    setConvertDealTitle(`${lead.name} — Deal`);
+    setConvertSuccess(false);
+    setConverting(false);
+  }
+
+  async function convertToDeal() {
+    if (!convertingLead) return;
+    setConverting(true);
+
+    const { data: client } = await supabase.from('clients').insert({
+      name: convertingLead.name,
+      email: convertingLead.email ?? undefined,
+      phone: convertingLead.phone ?? undefined,
+      company: convertingLead.company ?? undefined,
+      type: convertClientType,
+    }).select().single();
+
+    if (client) {
+      await supabase.from('deals').insert({
+        client_id: client.id,
+        title: convertDealTitle,
+        stage: 'new',
+        payment_status: 'pending',
+      });
+    }
+
+    await supabase.from('leads').update({ status: 'converted' }).eq('id', convertingLead.id);
+    setLeads(p => p.map(l => l.id === convertingLead!.id ? { ...l, status: 'converted' as const } : l));
+    setConverting(false);
+    setConvertSuccess(true);
+  }
+
+  // ── Task handlers ─────────────────────────────────────────────────────────
+
+  async function completeTask(id: string) {
+    setCompletingTaskId(id);
+    await supabase.from('sales_tasks').update({ status: 'completed' }).eq('id', id);
+    setSalesTasks(p => p.map(t => t.id === id ? { ...t, status: 'completed' as const } : t));
+    setCompletingTaskId(null);
+  }
+
+  // ── Derived values ────────────────────────────────────────────────────────
+
+  const filteredLeads = leads.filter(l =>
+    !searchQuery ||
+    l.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    l.company?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    l.email?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredTasks = salesTasks.filter(t =>
+    followUpFilter === 'all' || t.status === followUpFilter
+  );
+
+  const activeLeadsCount = leads.filter(l => !['converted', 'lost'].includes(l.status)).length;
+  const pendingTasksCount = salesTasks.filter(t => t.status === 'pending').length;
+  const overdueCount = salesTasks.filter(t =>
+    t.status === 'pending' && t.due_date && new Date(t.due_date) < new Date()
+  ).length;
+  const convertedCount = leads.filter(l => l.status === 'converted').length;
 
   const metrics = [
-    { label: 'Active Leads', value: '34', change: '+6 this week', icon: Users, color: 'blue' },
-    { label: 'Follow-ups Due', value: '12', change: '4 overdue', icon: Bell, color: 'orange' },
-    { label: 'Partnerships', value: '8', change: '+2 active', icon: Handshake, color: 'purple' },
-    { label: 'Activities This Week', value: '47', change: '+11 vs last week', icon: Activity, color: 'green' },
+    { label: 'Active Leads', value: String(activeLeadsCount), change: `${convertedCount} converted`, icon: Users, color: 'blue' },
+    { label: 'Follow-ups Due', value: String(pendingTasksCount), change: overdueCount > 0 ? `${overdueCount} overdue` : 'All on track', icon: Bell, color: overdueCount > 0 ? 'orange' : 'green' },
+    { label: 'Partnerships', value: '3', change: '2 active', icon: Handshake, color: 'purple' },
+    { label: 'Activities This Week', value: String(ACTIVITIES.length), change: 'Last 7 days', icon: Activity, color: 'green' },
   ];
 
-  const colorClasses = {
+  const colorClasses: Record<string, string> = {
     blue: 'bg-blue-50 text-blue-600',
     green: 'bg-green-50 text-green-600',
     purple: 'bg-purple-50 text-purple-600',
     orange: 'bg-orange-50 text-orange-600',
   };
 
-  const leads = [
-    {
-      id: 'LD-1045',
-      name: 'Jamil Builders Ltd',
-      contact: 'Jamil Umar',
-      email: 'jamil@jbuilders.com',
-      phone: '+234 801 234 5678',
-      type: 'Developer',
-      status: 'Qualified',
-      source: 'Referral',
-      estimatedValue: '₦45M',
-      assignedTo: 'Sarah Chen',
-      lastContact: '2 days ago',
-      nextFollowUp: 'May 6, 2026',
-    },
-    {
-      id: 'LD-1044',
-      name: 'Verdant Construction',
-      contact: 'Ada Okonkwo',
-      email: 'ada@verdant.ng',
-      phone: '+234 802 345 6789',
-      type: 'Contractor',
-      status: 'New',
-      source: 'LinkedIn',
-      estimatedValue: '₦20M',
-      assignedTo: 'Mike Johnson',
-      lastContact: '5 days ago',
-      nextFollowUp: 'May 5, 2026',
-    },
-    {
-      id: 'LD-1043',
-      name: 'Apex Estate Agency',
-      contact: 'Kunle Adeyemi',
-      email: 'kunle@apex-estate.com',
-      phone: '+234 803 456 7890',
-      type: 'Agency',
-      status: 'Proposal Sent',
-      source: 'Trade Show',
-      estimatedValue: '₦8M/yr',
-      assignedTo: 'Sarah Chen',
-      lastContact: '1 day ago',
-      nextFollowUp: 'May 7, 2026',
-    },
-    {
-      id: 'LD-1042',
-      name: 'Prime Investors Group',
-      contact: 'Bello Mohammed',
-      email: 'bello@primeinv.com',
-      phone: '+234 804 567 8901',
-      type: 'Investor',
-      status: 'Contacted',
-      source: 'Cold Outreach',
-      estimatedValue: '₦120M',
-      assignedTo: 'Emily Davis',
-      lastContact: '3 days ago',
-      nextFollowUp: 'May 8, 2026',
-    },
-  ];
-
-  const followUps = [
-    {
-      id: 'FU-305',
-      lead: 'Jamil Builders Ltd',
-      contact: 'Jamil Umar',
-      assignedTo: 'Sarah Chen',
-      action: 'Send updated service brochure',
-      dueDate: 'May 6, 2026',
-      priority: 'high',
-      status: 'pending',
-    },
-    {
-      id: 'FU-304',
-      lead: 'Verdant Construction',
-      contact: 'Ada Okonkwo',
-      assignedTo: 'Mike Johnson',
-      action: 'Schedule introductory call',
-      dueDate: 'May 5, 2026',
-      priority: 'high',
-      status: 'overdue',
-    },
-    {
-      id: 'FU-303',
-      lead: 'Apex Estate Agency',
-      contact: 'Kunle Adeyemi',
-      assignedTo: 'Sarah Chen',
-      action: 'Follow up on proposal decision',
-      dueDate: 'May 7, 2026',
-      priority: 'medium',
-      status: 'pending',
-    },
-    {
-      id: 'FU-302',
-      lead: 'Prime Investors Group',
-      contact: 'Bello Mohammed',
-      assignedTo: 'Emily Davis',
-      action: 'Send investment portfolio deck',
-      dueDate: 'May 3, 2026',
-      priority: 'medium',
-      status: 'completed',
-    },
-  ];
-
-  const partnerships = [
-    {
-      id: 'PAR-012',
-      name: 'BuildTech Solutions',
-      contact: 'Femi Oladele',
-      email: 'femi@buildtech.ng',
-      type: 'Technology Partner',
-      status: 'Active',
-      since: 'Jan 2025',
-      value: 'Software referrals',
-      notes: 'Mutual referral agreement for CRM clients',
-    },
-    {
-      id: 'PAR-011',
-      name: 'LegalEdge Solicitors',
-      contact: 'Aisha Suleiman',
-      email: 'aisha@legaledge.com',
-      type: 'Legal Partner',
-      status: 'Active',
-      since: 'Mar 2025',
-      value: 'Property legal services',
-      notes: 'Handles all client property documentation',
-    },
-    {
-      id: 'PAR-010',
-      name: 'First Trust Bank',
-      contact: 'Chidi Eze',
-      email: 'chidi@firsttrust.ng',
-      type: 'Finance Partner',
-      status: 'Negotiating',
-      since: 'Prospect',
-      value: 'Mortgage referrals',
-      notes: 'Discussing mortgage referral commission structure',
-    },
-  ];
-
-  const activities = [
-    {
-      id: 'ACT-220',
-      type: 'call',
-      user: 'Sarah Chen',
-      userCategory: 'Office Staff',
-      lead: 'Jamil Builders Ltd',
-      description: 'Discovery call — confirmed budget and timeline',
-      timestamp: '2 hours ago',
-    },
-    {
-      id: 'ACT-219',
-      type: 'email',
-      user: 'Mike Johnson',
-      userCategory: 'Office Staff',
-      lead: 'Verdant Construction',
-      description: 'Sent introduction email with company profile',
-      timestamp: '5 hours ago',
-    },
-    {
-      id: 'ACT-218',
-      type: 'meeting',
-      user: 'Emily Davis',
-      userCategory: 'Office Staff',
-      lead: 'Prime Investors Group',
-      description: 'In-person meeting at client office',
-      timestamp: '1 day ago',
-    },
-    {
-      id: 'ACT-217',
-      type: 'proposal',
-      user: 'Sarah Chen',
-      userCategory: 'Office Staff',
-      lead: 'Apex Estate Agency',
-      description: 'Submitted service proposal document',
-      timestamp: '1 day ago',
-    },
-    {
-      id: 'ACT-216',
-      type: 'site-visit',
-      user: 'David Martinez',
-      userCategory: 'Supervisor',
-      lead: 'Jamil Builders Ltd',
-      description: 'Site assessment visit for proposed project scope',
-      timestamp: '2 days ago',
-    },
-  ];
-
-  const leadStatusColors: Record<string, string> = {
-    New: 'bg-gray-100 text-gray-700',
-    Contacted: 'bg-blue-100 text-blue-700',
-    Qualified: 'bg-green-100 text-green-700',
-    'Proposal Sent': 'bg-purple-100 text-purple-700',
-    Negotiating: 'bg-orange-100 text-orange-700',
-  };
-
-  const followUpStatusColors: Record<string, string> = {
-    pending: 'bg-blue-100 text-blue-700',
-    overdue: 'bg-red-100 text-red-700',
-    completed: 'bg-green-100 text-green-700',
-  };
-
-  const partnerStatusColors: Record<string, string> = {
-    Active: 'bg-green-100 text-green-700',
-    Negotiating: 'bg-orange-100 text-orange-700',
-    Inactive: 'bg-gray-100 text-gray-700',
-  };
-
-  const activityConfig: Record<string, { icon: any; color: string }> = {
-    call: { icon: Phone, color: 'bg-blue-50 text-blue-600' },
-    email: { icon: Mail, color: 'bg-green-50 text-green-600' },
-    meeting: { icon: Calendar, color: 'bg-purple-50 text-purple-600' },
-    proposal: { icon: FileText, color: 'bg-orange-50 text-orange-600' },
-    'site-visit': { icon: Building2, color: 'bg-yellow-50 text-yellow-700' },
-  };
-
-  const tabs = [
-    { id: 'leads', label: 'Business Leads' },
-    { id: 'followups', label: 'Follow-ups' },
-    { id: 'partnerships', label: 'Partnerships' },
-    { id: 'activity', label: 'Activity Log' },
-  ];
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="p-6 space-y-6">
@@ -264,9 +230,7 @@ export function SalesMarketing() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-neutral-900">Sales & Marketing</h1>
-          <p className="text-sm text-neutral-500 mt-1">
-            Business leads, follow-ups, partnerships, and team activity
-          </p>
+          <p className="text-sm text-neutral-500 mt-1">Business leads, follow-ups, partnerships, and team activity</p>
         </div>
         <button
           onClick={() => setShowAddLead(true)}
@@ -289,7 +253,7 @@ export function SalesMarketing() {
                   <p className="text-2xl font-semibold text-neutral-900 mt-2">{metric.value}</p>
                   <p className="text-sm text-neutral-500 mt-1">{metric.change}</p>
                 </div>
-                <div className={`p-2.5 rounded-lg ${colorClasses[metric.color as keyof typeof colorClasses]}`}>
+                <div className={`p-2.5 rounded-lg ${colorClasses[metric.color]}`}>
                   <Icon className="w-5 h-5" />
                 </div>
               </div>
@@ -301,7 +265,7 @@ export function SalesMarketing() {
       {/* Tabs */}
       <div className="border-b border-neutral-200">
         <div className="flex gap-6">
-          {tabs.map((tab) => (
+          {TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
@@ -317,100 +281,136 @@ export function SalesMarketing() {
         </div>
       </div>
 
-      {/* Search row for leads + partnerships */}
-      {(activeTab === 'leads' || activeTab === 'partnerships') && (
-        <div className="flex items-center gap-3">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-            <input
-              type="text"
-              placeholder={activeTab === 'leads' ? 'Search leads, companies...' : 'Search partners...'}
-              className="w-full pl-9 pr-4 py-2 bg-white border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <button className="px-4 py-2 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors flex items-center gap-2">
-            <Filter className="w-4 h-4" />
-            Filter
-          </button>
-        </div>
-      )}
-
       {/* ── BUSINESS LEADS ── */}
       {activeTab === 'leads' && (
-        <div className="bg-white rounded-xl border border-neutral-200">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-neutral-50 border-b border-neutral-200">
-                <tr>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Lead / Contact
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Type
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Est. Value
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Next Follow-up
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Assigned
-                  </th>
-                  <th className="px-5 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {leads.map((lead) => (
-                  <tr key={lead.id} className="hover:bg-neutral-50 transition-colors">
-                    <td className="px-5 py-4">
-                      <p className="text-sm font-medium text-neutral-900">{lead.name}</p>
-                      <p className="text-xs text-neutral-500 mt-0.5">{lead.contact}</p>
-                      <div className="flex items-center gap-1 mt-1 text-xs text-neutral-500">
-                        <Mail className="w-3 h-3" />
-                        {lead.email}
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 text-neutral-700">
-                        {lead.type}
-                      </span>
-                      <p className="text-xs text-neutral-500 mt-1">via {lead.source}</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                          leadStatusColors[lead.status] ?? 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        {lead.status}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-sm font-medium text-neutral-900">
-                      {lead.estimatedValue}
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-1 text-xs text-neutral-700">
-                        <Calendar className="w-3.5 h-3.5 text-neutral-400" />
-                        {lead.nextFollowUp}
-                      </div>
-                      <p className="text-xs text-neutral-500 mt-1">Last: {lead.lastContact}</p>
-                    </td>
-                    <td className="px-5 py-4 text-sm text-neutral-900">{lead.assignedTo}</td>
-                    <td className="px-5 py-4">
-                      <button className="p-1 hover:bg-neutral-100 rounded transition-colors">
-                        <MoreVertical className="w-4 h-4 text-neutral-400" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search leads, companies..."
+                className="w-full pl-9 pr-4 py-2 bg-white border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <button className="px-4 py-2 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors flex items-center gap-2 text-sm">
+              <Filter className="w-4 h-4" />
+              Filter
+            </button>
           </div>
-        </div>
+
+          <div className="bg-white rounded-xl border border-neutral-200">
+            {loading ? (
+              <div className="p-12 flex items-center justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-neutral-400" />
+              </div>
+            ) : filteredLeads.length === 0 ? (
+              <div className="p-12 text-center">
+                <Users className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
+                <p className="text-neutral-500 font-medium">No leads yet</p>
+                <p className="text-sm text-neutral-400 mt-1">Add your first lead to get started.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-neutral-50 border-b border-neutral-200">
+                    <tr>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Lead / Contact</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Type / Source</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Status</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Follow-up</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100">
+                    {filteredLeads.map((lead) => {
+                      const isConverted = lead.status === 'converted' || lead.status === 'lost';
+                      const isOverdue = lead.follow_up_date && new Date(lead.follow_up_date) < new Date() && !isConverted;
+                      return (
+                        <tr key={lead.id} className="hover:bg-neutral-50 transition-colors">
+                          <td className="px-5 py-4">
+                            <p className="text-sm font-medium text-neutral-900">{lead.name}</p>
+                            {lead.contact_name && <p className="text-xs text-neutral-500 mt-0.5">{lead.contact_name}</p>}
+                            {lead.email && (
+                              <div className="flex items-center gap-1 mt-1 text-xs text-neutral-400">
+                                <Mail className="w-3 h-3" />{lead.email}
+                              </div>
+                            )}
+                            {lead.phone && (
+                              <div className="flex items-center gap-1 mt-0.5 text-xs text-neutral-400">
+                                <Phone className="w-3 h-3" />{lead.phone}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-5 py-4">
+                            {lead.lead_type && (
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 text-neutral-700">
+                                {lead.lead_type}
+                              </span>
+                            )}
+                            {lead.source && <p className="text-xs text-neutral-500 mt-1">via {lead.source}</p>}
+                          </td>
+                          <td className="px-5 py-4">
+                            <div className="relative">
+                              <button
+                                onClick={() => setStatusMenuId(statusMenuId === lead.id ? null : lead.id)}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium capitalize ${LEAD_STATUS_COLORS[lead.status] ?? 'bg-gray-100 text-gray-700'}`}
+                              >
+                                {lead.status}
+                                <MoreVertical className="w-3 h-3" />
+                              </button>
+                              {statusMenuId === lead.id && (
+                                <div className="absolute top-full left-0 mt-1 bg-white border border-neutral-200 rounded-lg shadow-lg z-10 py-1 min-w-[130px]">
+                                  {LEAD_STATUSES.map(s => (
+                                    <button
+                                      key={s}
+                                      onClick={() => updateLeadStatus(lead.id, s)}
+                                      className={`w-full text-left px-3 py-1.5 text-xs capitalize hover:bg-neutral-50 ${lead.status === s ? 'font-semibold' : ''}`}
+                                    >
+                                      {s}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-5 py-4">
+                            {lead.follow_up_date ? (
+                              <div className={`flex items-center gap-1 text-xs ${isOverdue ? 'text-red-600' : 'text-neutral-600'}`}>
+                                <Calendar className="w-3.5 h-3.5" />
+                                {new Date(lead.follow_up_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                                {isOverdue && <span className="text-red-500 font-medium ml-1">Overdue</span>}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-neutral-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-4">
+                            {!isConverted ? (
+                              <button
+                                onClick={() => openConvert(lead)}
+                                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-medium"
+                              >
+                                <ArrowUpRight className="w-3.5 h-3.5" />
+                                Convert to Deal
+                              </button>
+                            ) : (
+                              <span className="text-xs text-neutral-400 italic">
+                                {lead.status === 'converted' ? '✓ Converted' : 'Lost'}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {/* ── FOLLOW-UPS ── */}
@@ -418,66 +418,80 @@ export function SalesMarketing() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex gap-2">
-              {['All', 'Pending', 'Overdue', 'Completed'].map((f) => (
+              {(['all', 'pending', 'completed'] as const).map(f => (
                 <button
                   key={f}
-                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-neutral-200 bg-white hover:bg-neutral-50 transition-colors"
+                  onClick={() => setFollowUpFilter(f)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors capitalize ${
+                    followUpFilter === f
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                  }`}
                 >
                   {f}
                 </button>
               ))}
             </div>
-            <button className="px-4 py-2 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors flex items-center gap-2 text-sm">
-              <Plus className="w-4 h-4" />
-              Schedule Follow-up
-            </button>
           </div>
 
-          {followUps.map((fu) => (
-            <div key={fu.id} className="bg-white rounded-xl border border-neutral-200 p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <div
-                    className={`mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                      fu.status === 'overdue'
-                        ? 'bg-red-500'
-                        : fu.status === 'completed'
-                        ? 'bg-green-500'
-                        : 'bg-blue-500'
-                    }`}
-                  />
-                  <div>
-                    <p className="text-sm font-medium text-neutral-900">{fu.action}</p>
-                    <p className="text-xs text-neutral-500 mt-0.5">
-                      {fu.lead} — {fu.contact}
-                    </p>
-                    <div className="flex items-center gap-3 mt-2">
-                      <span className="flex items-center gap-1 text-xs text-neutral-600">
-                        <Clock className="w-3 h-3" />
-                        Due: {fu.dueDate}
-                      </span>
-                      <span className="text-xs text-neutral-500">Assigned: {fu.assignedTo}</span>
+          {filteredTasks.length === 0 ? (
+            <div className="bg-white rounded-xl border border-neutral-200 p-12 text-center">
+              <CheckCircle2 className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
+              <p className="text-neutral-500 font-medium">No follow-ups</p>
+              <p className="text-sm text-neutral-400 mt-1">
+                Sales tasks assigned from deals will appear here.
+              </p>
+            </div>
+          ) : (
+            filteredTasks.map(task => {
+              const isOverdue = task.status === 'pending' && task.due_date && new Date(task.due_date) < new Date();
+              return (
+                <div key={task.id} className="bg-white rounded-xl border border-neutral-200 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className={`mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                        task.status === 'completed' ? 'bg-green-500' : isOverdue ? 'bg-red-500' : 'bg-blue-500'
+                      }`} />
+                      <div>
+                        <p className="text-sm font-medium text-neutral-900">{task.action}</p>
+                        <p className="text-xs text-neutral-500 mt-0.5">Re: {task.subject}</p>
+                        <div className="flex items-center gap-3 mt-2 flex-wrap">
+                          {task.due_date && (
+                            <span className={`flex items-center gap-1 text-xs ${isOverdue ? 'text-red-600 font-medium' : 'text-neutral-600'}`}>
+                              <Clock className="w-3 h-3" />
+                              Due: {new Date(task.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              {isOverdue && ' — Overdue'}
+                            </span>
+                          )}
+                          {task.assigned_to_name && (
+                            <span className="text-xs text-neutral-500">→ {task.assigned_to_name}</span>
+                          )}
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            task.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {task.status}
+                          </span>
+                        </div>
+                      </div>
                     </div>
+                    {task.status === 'pending' && (
+                      <button
+                        onClick={() => completeTask(task.id)}
+                        disabled={completingTaskId === task.id}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors flex-shrink-0 disabled:opacity-50"
+                      >
+                        {completingTaskId === task.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <CheckCircle2 className="w-3.5 h-3.5" />
+                        }
+                        Mark Done
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <span
-                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                      followUpStatusColors[fu.status]
-                    }`}
-                  >
-                    {fu.status}
-                  </span>
-                  {fu.status !== 'completed' && (
-                    <button className="flex items-center gap-1 px-3 py-1.5 text-xs bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      Mark Done
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
+              );
+            })
+          )}
         </div>
       )}
 
@@ -490,8 +504,7 @@ export function SalesMarketing() {
               Add Partner
             </button>
           </div>
-
-          {partnerships.map((partner) => (
+          {PARTNERSHIPS.map(partner => (
             <div key={partner.id} className="bg-white rounded-xl border border-neutral-200 p-5">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-4">
@@ -501,25 +514,17 @@ export function SalesMarketing() {
                   <div>
                     <div className="flex items-center gap-3 mb-1">
                       <h3 className="text-base font-semibold text-neutral-900">{partner.name}</h3>
-                      <span
-                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                          partnerStatusColors[partner.status] ?? 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${PARTNER_STATUS_COLORS[partner.status] ?? 'bg-gray-100 text-gray-700'}`}>
                         {partner.status}
                       </span>
                     </div>
-                    <p className="text-xs text-neutral-500">
-                      {partner.type} • Since {partner.since}
-                    </p>
+                    <p className="text-xs text-neutral-500">{partner.type} · Since {partner.since}</p>
                     <div className="flex flex-wrap items-center gap-3 mt-2">
                       <span className="flex items-center gap-1 text-xs text-neutral-600">
-                        <Users className="w-3 h-3" />
-                        {partner.contact}
+                        <Users className="w-3 h-3" />{partner.contact}
                       </span>
                       <span className="flex items-center gap-1 text-xs text-neutral-600">
-                        <Mail className="w-3 h-3" />
-                        {partner.email}
+                        <Mail className="w-3 h-3" />{partner.email}
                       </span>
                     </div>
                     <p className="text-sm text-neutral-700 mt-2">{partner.notes}</p>
@@ -528,9 +533,6 @@ export function SalesMarketing() {
                 <div className="text-right flex-shrink-0">
                   <p className="text-xs text-neutral-500">Partnership Value</p>
                   <p className="text-sm font-medium text-neutral-900 mt-1">{partner.value}</p>
-                  <button className="mt-2 px-3 py-1.5 text-xs bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors">
-                    View Details
-                  </button>
                 </div>
               </div>
             </div>
@@ -541,26 +543,15 @@ export function SalesMarketing() {
       {/* ── ACTIVITY LOG ── */}
       {activeTab === 'activity' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-neutral-500">
-              All sales team activities — office staff and supervisors
-            </p>
-            <button className="px-4 py-2 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors flex items-center gap-2 text-sm">
-              <Plus className="w-4 h-4" />
-              Log Activity
-            </button>
-          </div>
-
+          <p className="text-sm text-neutral-500">All sales team activities — office staff and supervisors</p>
           <div className="bg-white rounded-xl border border-neutral-200 divide-y divide-neutral-100">
-            {activities.map((activity) => {
-              const config = activityConfig[activity.type] ?? activityConfig.call;
+            {ACTIVITIES.map(activity => {
+              const config = ACTIVITY_CONFIG[activity.type] ?? ACTIVITY_CONFIG.call;
               const Icon = config.icon;
               return (
                 <div key={activity.id} className="p-5 hover:bg-neutral-50 transition-colors">
                   <div className="flex gap-4">
-                    <div
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${config.color}`}
-                    >
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${config.color}`}>
                       <Icon className="w-5 h-5" />
                     </div>
                     <div className="flex-1">
@@ -568,19 +559,14 @@ export function SalesMarketing() {
                         <div>
                           <p className="text-sm text-neutral-900">
                             <span className="font-medium">{activity.user}</span>
-                            <span className="text-xs text-neutral-500 ml-2">
-                              ({activity.userCategory})
-                            </span>
+                            <span className="text-xs text-neutral-500 ml-2">({activity.userCategory})</span>
                           </p>
                           <p className="text-sm text-neutral-700 mt-0.5">{activity.description}</p>
                           <p className="text-xs text-neutral-500 mt-1">
-                            Lead: {activity.lead} •{' '}
-                            <span className="capitalize">{activity.type.replace('-', ' ')}</span>
+                            Lead: {activity.lead} · <span className="capitalize">{activity.type.replace('-', ' ')}</span>
                           </p>
                         </div>
-                        <span className="text-xs text-neutral-400 whitespace-nowrap">
-                          {activity.timestamp}
-                        </span>
+                        <span className="text-xs text-neutral-400 whitespace-nowrap">{activity.timestamp}</span>
                       </div>
                     </div>
                   </div>
@@ -591,72 +577,67 @@ export function SalesMarketing() {
         </div>
       )}
 
-      {/* ── ADD LEAD MODAL ── */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* MODALS                                                                */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+
+      {/* Add Lead Modal */}
       {showAddLead && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-neutral-200 flex items-center justify-between sticky top-0 bg-white">
               <h2 className="text-xl font-semibold text-neutral-900">Add Business Lead</h2>
-              <button
-                onClick={() => setShowAddLead(false)}
-                className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
-              >
+              <button onClick={() => setShowAddLead(false)} className="p-2 hover:bg-neutral-100 rounded-lg transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
-
-            <div className="p-6 space-y-5">
-              {/* Lead Type */}
+            <form onSubmit={saveLead} className="p-6 space-y-5">
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Lead Type *
-                </label>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">Lead Type</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {['Developer', 'Investor', 'Contractor', 'Agency', 'Corporate', 'Individual'].map(
-                    (t) => (
-                      <button
-                        key={t}
-                        onClick={() => setLeadType(t)}
-                        className={`py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
-                          leadType === t
-                            ? 'border-blue-600 bg-blue-50 text-blue-700'
-                            : 'border-neutral-200 text-neutral-700 hover:border-neutral-300'
-                        }`}
-                      >
-                        {t}
-                      </button>
-                    )
-                  )}
+                  {LEAD_TYPES.map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setAddLeadType(t)}
+                      className={`py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                        addLeadType === t
+                          ? 'border-blue-600 bg-blue-50 text-blue-700'
+                          : 'border-neutral-200 text-neutral-700 hover:border-neutral-300'
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">
-                    Company / Name *
-                  </label>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Company / Name *</label>
                   <input
-                    type="text"
+                    required
+                    value={addLeadForm.name}
+                    onChange={e => setAddLeadForm(f => ({ ...f, name: e.target.value }))}
                     placeholder="Company or individual name"
                     className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">
-                    Contact Person *
-                  </label>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Contact Person</label>
                   <input
-                    type="text"
+                    value={addLeadForm.contact_name}
+                    onChange={e => setAddLeadForm(f => ({ ...f, contact_name: e.target.value }))}
                     placeholder="Full name"
                     className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">
-                    Phone *
-                  </label>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Phone</label>
                   <input
                     type="tel"
+                    value={addLeadForm.phone}
+                    onChange={e => setAddLeadForm(f => ({ ...f, phone: e.target.value }))}
                     placeholder="+234 800 000 0000"
                     className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
@@ -665,48 +646,28 @@ export function SalesMarketing() {
                   <label className="block text-sm font-medium text-neutral-700 mb-1">Email</label>
                   <input
                     type="email"
+                    value={addLeadForm.email}
+                    onChange={e => setAddLeadForm(f => ({ ...f, email: e.target.value }))}
                     placeholder="email@company.com"
                     className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-1">Source</label>
-                  <select className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option>Referral</option>
-                    <option>Cold Outreach</option>
-                    <option>LinkedIn</option>
-                    <option>Trade Show</option>
-                    <option>Website</option>
-                    <option>Walk-in</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">
-                    Estimated Value
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. ₦20M or ₦5M/yr"
+                  <select
+                    value={addLeadForm.source}
+                    onChange={e => setAddLeadForm(f => ({ ...f, source: e.target.value }))}
                     className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">
-                    Assign To
-                  </label>
-                  <select className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option>Sarah Chen</option>
-                    <option>Mike Johnson</option>
-                    <option>Emily Davis</option>
-                    <option>Robert Lee</option>
+                  >
+                    {LEAD_SOURCES.map(s => <option key={s}>{s}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">
-                    Next Follow-up
-                  </label>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Next Follow-up</label>
                   <input
                     type="date"
+                    value={addLeadForm.follow_up_date}
+                    onChange={e => setAddLeadForm(f => ({ ...f, follow_up_date: e.target.value }))}
                     className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -714,24 +675,128 @@ export function SalesMarketing() {
                   <label className="block text-sm font-medium text-neutral-700 mb-1">Notes</label>
                   <textarea
                     rows={3}
+                    value={addLeadForm.notes}
+                    onChange={e => setAddLeadForm(f => ({ ...f, notes: e.target.value }))}
                     placeholder="Initial notes about this lead..."
-                    className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  ></textarea>
+                    className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  />
                 </div>
               </div>
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowAddLead(false)}
+                  className="flex-1 px-4 py-2.5 border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingLead || !addLeadForm.name.trim()}
+                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {savingLead && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Add Lead
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Convert to Deal Modal */}
+      {convertingLead && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md">
+            <div className="p-6 border-b border-neutral-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-neutral-900">Convert to Brokerage Deal</h2>
+                <p className="text-sm text-neutral-500 mt-0.5">{convertingLead.name}</p>
+              </div>
+              <button onClick={() => setConvertingLead(null)} className="p-2 hover:bg-neutral-100 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <div className="p-6 border-t border-neutral-200 flex justify-end gap-3 sticky bottom-0 bg-white">
-              <button
-                onClick={() => setShowAddLead(false)}
-                className="px-4 py-2 border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors text-sm"
-              >
-                Cancel
-              </button>
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
-                Add Lead
-              </button>
-            </div>
+            {convertSuccess ? (
+              <div className="p-10 text-center">
+                <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-neutral-900 mb-1">Deal Created</h3>
+                <p className="text-sm text-neutral-500 mb-5">
+                  {convertingLead.name} is now a client with an active deal in the pipeline.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setConvertingLead(null)}
+                    className="flex-1 px-4 py-2.5 border border-neutral-200 rounded-lg text-sm hover:bg-neutral-50 transition-colors"
+                  >
+                    Close
+                  </button>
+                  <a
+                    href="/app/brokerage"
+                    className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <ArrowUpRight className="w-4 h-4" />
+                    View in Brokerage
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div className="p-6 space-y-5">
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-2">Client Type *</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {(['buyer', 'seller', 'investor'] as const).map(t => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setConvertClientType(t)}
+                        className={`py-3 rounded-xl border-2 text-sm font-medium transition-all capitalize ${
+                          convertClientType === t
+                            ? 'border-blue-600 bg-blue-50 text-blue-700'
+                            : 'border-neutral-200 text-neutral-700 hover:border-neutral-300'
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1.5">Deal Title</label>
+                  <input
+                    value={convertDealTitle}
+                    onChange={e => setConvertDealTitle(e.target.value)}
+                    className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-800">
+                  This will create a <strong>Client</strong> record and open a new <strong>Deal</strong> at stage <em>New</em> in Brokerage Operations. The lead will be marked as Converted.
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setConvertingLead(null)}
+                    className="flex-1 px-4 py-2.5 border border-neutral-200 rounded-lg text-sm hover:bg-neutral-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={convertToDeal}
+                    disabled={converting || !convertDealTitle.trim()}
+                    className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {converting && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Convert to Deal
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

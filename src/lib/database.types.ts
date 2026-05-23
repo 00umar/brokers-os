@@ -163,6 +163,8 @@ export interface Lead {
   id: string
   name: string
   company?: string
+  contact_name?: string
+  lead_type?: string
   email?: string
   phone?: string
   source?: string
@@ -170,6 +172,18 @@ export interface Lead {
   assigned_to?: string
   notes?: string
   follow_up_date?: string
+  created_at: string
+}
+
+export interface SalesTask {
+  id: string
+  deal_id?: string
+  lead_id?: string
+  subject: string
+  action: string
+  assigned_to_name?: string
+  due_date?: string
+  status: 'pending' | 'completed'
   created_at: string
 }
 
@@ -189,6 +203,7 @@ export interface Database {
       weekly_reports: { Row: WeeklyReport; Insert: Omit<WeeklyReport, 'id' | 'created_at'>; Update: Partial<WeeklyReport> }
       report_task_items: { Row: ReportTaskItem; Insert: Omit<ReportTaskItem, 'id' | 'created_at'>; Update: Partial<ReportTaskItem> }
       leads: { Row: Lead; Insert: Omit<Lead, 'id' | 'created_at'>; Update: Partial<Lead> }
+      sales_tasks: { Row: SalesTask; Insert: Omit<SalesTask, 'id' | 'created_at'>; Update: Partial<SalesTask> }
     }
   }
 }
