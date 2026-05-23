@@ -17,6 +17,13 @@ import {
   ChevronDown,
   Loader2,
   PauseCircle,
+  Building2,
+  Hammer,
+  Palette,
+  Globe,
+  Zap,
+  Wrench,
+  ArrowLeft,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -26,6 +33,96 @@ interface TaskWithRelations extends Task {
   project?: { name: string } | null;
   phase?: { name: string } | null;
 }
+
+const PROJECT_CATEGORIES = [
+  {
+    id: 'New Construction',
+    description: 'Build a new structure from scratch',
+    subtypes: [
+      'Residential — Detached House',
+      'Residential — Duplex / Semi-Detached',
+      'Residential — Apartment Block',
+      'Commercial — Office Building',
+      'Commercial — Retail / Shopping',
+      'Warehouse / Industrial',
+      'Mixed-Use Development',
+    ],
+  },
+  {
+    id: 'Renovation',
+    description: 'Repair or upgrade an existing building',
+    subtypes: [
+      'Full Renovation',
+      'Structural / Civil Works',
+      'Roofing & Waterproofing',
+      'Plumbing & Electrical',
+      'Exterior Works (Paint / Facade)',
+      'Emergency Repair',
+    ],
+  },
+  {
+    id: 'Interior Design & Fit-out',
+    description: 'Interior finishing, furnishing, and decor',
+    subtypes: [
+      'Residential Fit-out',
+      'Office / Corporate Fit-out',
+      'Retail / Hospitality Fit-out',
+      'Show Apartment / Staging',
+      'Kitchen & Bathroom Remodel',
+    ],
+  },
+  {
+    id: 'Property Development',
+    description: 'Land development and estate planning',
+    subtypes: [
+      'Estate Development',
+      'Land Subdivision & Survey',
+      'Gated Community',
+      'Commercial Complex',
+      'Mixed-Use Estate',
+    ],
+  },
+  {
+    id: 'Infrastructure & Services',
+    description: 'Roads, utilities, and site services',
+    subtypes: [
+      'Roads & Drainage',
+      'Water Supply & Borehole',
+      'Electrical & Solar Installation',
+      'Perimeter Fence & Gate',
+      'Landscaping & External Works',
+    ],
+  },
+  {
+    id: 'Facility Management',
+    description: 'Ongoing property maintenance and servicing',
+    subtypes: [
+      'Routine Maintenance Schedule',
+      'Annual Inspection & Audit',
+      'Mechanical & Electrical Service',
+      'Cleaning & Janitorial Contract',
+      'Security System Upgrade',
+    ],
+  },
+];
+
+const CATEGORY_ICONS: Record<string, React.FC<{ className?: string }>> = {
+  'New Construction': Building2,
+  'Renovation': Hammer,
+  'Interior Design & Fit-out': Palette,
+  'Property Development': Globe,
+  'Infrastructure & Services': Zap,
+  'Facility Management': Wrench,
+};
+
+const CATEGORY_COLORS: Record<string, string> = {
+  'New Construction': 'bg-blue-100 text-blue-600',
+  'Renovation': 'bg-orange-100 text-orange-600',
+  'Interior Design & Fit-out': 'bg-purple-100 text-purple-600',
+  'Property Development': 'bg-green-100 text-green-600',
+  'Infrastructure & Services': 'bg-amber-100 text-amber-600',
+  'Facility Management': 'bg-neutral-100 text-neutral-600',
+};
 
 export function ProjectManagement() {
   const { profile } = useAuth();
@@ -56,6 +153,9 @@ export function ProjectManagement() {
   const [addingTaskForPhase, setAddingTaskForPhase] = useState<string | null>(null);
   const [newTaskForm, setNewTaskForm] = useState({ name: '', assigned_to: '' });
   const [savingTask, setSavingTask] = useState(false);
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
+  const [wizardCategory, setWizardCategory] = useState('');
+  const [wizardSubType, setWizardSubType] = useState('');
   const [newProjectForm, setNewProjectForm] = useState({
     name: '',
     type: 'New Construction',
@@ -131,9 +231,10 @@ export function ProjectManagement() {
   const createProject = async () => {
     if (!newProjectForm.name.trim()) return;
     setSavingProject(true);
+    const projectType = wizardSubType ? `${wizardCategory}: ${wizardSubType}` : wizardCategory;
     const { error } = await supabase.from('projects').insert({
       name: newProjectForm.name.trim(),
-      type: newProjectForm.type || null,
+      type: projectType || null,
       deadline: newProjectForm.deadline || null,
       budget: newProjectForm.budget ? parseFloat(newProjectForm.budget.replace(/[^\d.]/g, '')) : null,
       pm_name: newProjectForm.pm_name || null,
@@ -142,7 +243,10 @@ export function ProjectManagement() {
     setSavingProject(false);
     if (!error) {
       setShowNewProject(false);
-      setNewProjectForm({ name: '', type: 'New Construction', deadline: '', budget: '', pm_name: '' });
+      setNewProjectForm({ name: '', type: '', deadline: '', budget: '', pm_name: '' });
+      setWizardStep(1);
+      setWizardCategory('');
+      setWizardSubType('');
       fetchProjects();
     }
   };
@@ -226,7 +330,7 @@ export function ProjectManagement() {
           <p className="text-sm text-neutral-500 mt-1">Track project execution roadmaps and team coordination</p>
         </div>
         <button
-          onClick={() => setShowNewProject(true)}
+          onClick={() => { setShowNewProject(true); setWizardStep(1); setWizardCategory(''); setWizardSubType(''); setNewProjectForm({ name: '', type: '', deadline: '', budget: '', pm_name: '' }); }}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
@@ -302,7 +406,7 @@ export function ProjectManagement() {
               <h3 className="font-medium text-neutral-900 mb-1">No projects yet</h3>
               <p className="text-sm text-neutral-500 mb-4">Create your first project to get started.</p>
               <button
-                onClick={() => setShowNewProject(true)}
+                onClick={() => { setShowNewProject(true); setWizardStep(1); setWizardCategory(''); setWizardSubType(''); setNewProjectForm({ name: '', type: '', deadline: '', budget: '', pm_name: '' }); }}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
               >
                 Create Project
@@ -719,90 +823,169 @@ export function ProjectManagement() {
         </div>
       )}
 
-      {/* ── New Project Modal ── */}
+      {/* ── New Project Wizard ── */}
       {showNewProject && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-lg w-full">
-            <div className="p-6 border-b border-neutral-200 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-neutral-900">New Project</h2>
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+
+            {/* Header */}
+            <div className="p-6 border-b border-neutral-200 flex items-center justify-between flex-shrink-0">
+              <div>
+                <h2 className="text-xl font-semibold text-neutral-900">
+                  {wizardStep === 1 ? 'New Project' : wizardStep === 2 ? wizardCategory : 'Project Details'}
+                </h2>
+                <p className="text-sm text-neutral-500 mt-0.5">
+                  {wizardStep === 1 ? 'What type of project is this?' :
+                   wizardStep === 2 ? 'Select the scope of work' :
+                   `${wizardCategory} — ${wizardSubType}`}
+                </p>
+              </div>
               <button onClick={() => setShowNewProject(false)} className="p-2 hover:bg-neutral-100 rounded-lg transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">Project Name *</label>
-                <input
-                  type="text"
-                  value={newProjectForm.name}
-                  onChange={e => setNewProjectForm(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="e.g. Lekki Phase 2 Tower"
-                  className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">Project Manager</label>
-                  <input
-                    type="text"
-                    value={newProjectForm.pm_name}
-                    onChange={e => setNewProjectForm(prev => ({ ...prev, pm_name: e.target.value }))}
-                    placeholder="PM name"
-                    className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+
+            {/* Step indicator */}
+            <div className="px-6 pt-4 flex items-center gap-2 flex-shrink-0">
+              <div className={`w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold ${wizardStep >= 1 ? 'bg-blue-600 text-white' : 'bg-neutral-100 text-neutral-500'}`}>1</div>
+              <div className={`h-0.5 flex-1 transition-colors ${wizardStep >= 2 ? 'bg-blue-500' : 'bg-neutral-200'}`} />
+              <div className={`w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold ${wizardStep >= 2 ? 'bg-blue-600 text-white' : 'bg-neutral-100 text-neutral-500'}`}>2</div>
+              <div className={`h-0.5 flex-1 transition-colors ${wizardStep >= 3 ? 'bg-blue-500' : 'bg-neutral-200'}`} />
+              <div className={`w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold ${wizardStep >= 3 ? 'bg-blue-600 text-white' : 'bg-neutral-100 text-neutral-500'}`}>3</div>
+            </div>
+            <div className="px-6 flex text-xs text-neutral-400 mt-1 mb-1 flex-shrink-0">
+              <span className={`flex-1 ${wizardStep === 1 ? 'text-blue-600 font-medium' : ''}`}>Project Type</span>
+              <span className={`flex-1 text-center ${wizardStep === 2 ? 'text-blue-600 font-medium' : ''}`}>Scope</span>
+              <span className={`flex-1 text-right ${wizardStep === 3 ? 'text-blue-600 font-medium' : ''}`}>Details</span>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 overflow-y-auto flex-1">
+
+              {/* Step 1 — Project Type */}
+              {wizardStep === 1 && (
+                <div className="grid grid-cols-2 gap-3">
+                  {PROJECT_CATEGORIES.map(cat => {
+                    const Icon = CATEGORY_ICONS[cat.id];
+                    return (
+                      <button
+                        key={cat.id}
+                        onClick={() => { setWizardCategory(cat.id); setWizardSubType(''); setWizardStep(2); }}
+                        className="p-4 rounded-xl border-2 border-neutral-200 text-left hover:border-blue-300 hover:bg-blue-50 transition-all"
+                      >
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${CATEGORY_COLORS[cat.id]}`}>
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <div className="font-medium text-neutral-900 text-sm leading-tight">{cat.id}</div>
+                        <div className="text-xs text-neutral-500 mt-1 leading-relaxed">{cat.description}</div>
+                      </button>
+                    );
+                  })}
                 </div>
+              )}
+
+              {/* Step 2 — Scope */}
+              {wizardStep === 2 && (
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">Deadline</label>
-                  <input
-                    type="date"
-                    value={newProjectForm.deadline}
-                    onChange={e => setNewProjectForm(prev => ({ ...prev, deadline: e.target.value }))}
-                    className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">Budget (₦)</label>
-                  <input
-                    type="text"
-                    value={newProjectForm.budget}
-                    onChange={e => setNewProjectForm(prev => ({ ...prev, budget: e.target.value }))}
-                    placeholder="e.g. 500000000"
-                    className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">Project Type</label>
-                  <select
-                    value={newProjectForm.type}
-                    onChange={e => setNewProjectForm(prev => ({ ...prev, type: e.target.value }))}
-                    className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  <button
+                    onClick={() => setWizardStep(1)}
+                    className="flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-800 mb-5 transition-colors"
                   >
-                    <option>New Construction</option>
-                    <option>Renovation</option>
-                    <option>Fit-out</option>
-                    <option>Infrastructure</option>
-                  </select>
+                    <ArrowLeft className="w-4 h-4" />
+                    Back to project types
+                  </button>
+                  <div className="space-y-2">
+                    {(PROJECT_CATEGORIES.find(c => c.id === wizardCategory)?.subtypes ?? []).map(sub => (
+                      <button
+                        key={sub}
+                        onClick={() => { setWizardSubType(sub); setWizardStep(3); }}
+                        className="w-full p-3.5 rounded-xl border-2 border-neutral-200 text-left text-sm font-medium text-neutral-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-900 transition-all"
+                      >
+                        {sub}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+              )}
+
+              {/* Step 3 — Details */}
+              {wizardStep === 3 && (
+                <div className="space-y-4">
+                  <button
+                    onClick={() => setWizardStep(2)}
+                    className="flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-800 transition-colors"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Back
+                  </button>
+                  <div className="p-3 bg-blue-50 rounded-lg text-sm text-blue-800">
+                    <span className="font-medium">{wizardCategory}</span> — {wizardSubType}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 mb-2">Project Name *</label>
+                    <input
+                      type="text"
+                      value={newProjectForm.name}
+                      onChange={e => setNewProjectForm(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder={`e.g. ${wizardSubType} — Lekki Phase 1`}
+                      autoFocus
+                      className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700 mb-2">Project Manager</label>
+                      <input
+                        type="text"
+                        value={newProjectForm.pm_name}
+                        onChange={e => setNewProjectForm(prev => ({ ...prev, pm_name: e.target.value }))}
+                        placeholder="PM name"
+                        className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700 mb-2">Deadline</label>
+                      <input
+                        type="date"
+                        value={newProjectForm.deadline}
+                        onChange={e => setNewProjectForm(prev => ({ ...prev, deadline: e.target.value }))}
+                        className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 mb-2">Budget (₦)</label>
+                    <input
+                      type="text"
+                      value={newProjectForm.budget}
+                      onChange={e => setNewProjectForm(prev => ({ ...prev, budget: e.target.value }))}
+                      placeholder="e.g. 500,000,000"
+                      className="w-full px-4 py-2 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer — only on step 3 */}
+            {wizardStep === 3 && (
+              <div className="p-6 border-t border-neutral-200 flex justify-end gap-3 flex-shrink-0">
+                <button
+                  onClick={() => setShowNewProject(false)}
+                  className="px-4 py-2 border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={createProject}
+                  disabled={!newProjectForm.name.trim() || savingProject}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {savingProject && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Create Project
+                </button>
               </div>
-            </div>
-            <div className="p-6 border-t border-neutral-200 flex justify-end gap-3">
-              <button
-                onClick={() => setShowNewProject(false)}
-                className="px-4 py-2 border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={createProject}
-                disabled={!newProjectForm.name.trim() || savingProject}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {savingProject && <Loader2 className="w-4 h-4 animate-spin" />}
-                Create Project
-              </button>
-            </div>
+            )}
           </div>
         </div>
       )}
