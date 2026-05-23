@@ -50,6 +50,12 @@ export function ProjectManagement() {
   const [openAssignDropdown, setOpenAssignDropdown] = useState<string | null>(null);
   const [showNewProject, setShowNewProject] = useState(false);
   const [savingProject, setSavingProject] = useState(false);
+  const [addingPhase, setAddingPhase] = useState(false);
+  const [newPhaseName, setNewPhaseName] = useState('');
+  const [savingPhase, setSavingPhase] = useState(false);
+  const [addingTaskForPhase, setAddingTaskForPhase] = useState<string | null>(null);
+  const [newTaskForm, setNewTaskForm] = useState({ name: '', assigned_to: '' });
+  const [savingTask, setSavingTask] = useState(false);
   const [newProjectForm, setNewProjectForm] = useState({
     name: '',
     type: 'New Construction',
@@ -139,6 +145,46 @@ export function ProjectManagement() {
       setNewProjectForm({ name: '', type: 'New Construction', deadline: '', budget: '', pm_name: '' });
       fetchProjects();
     }
+  };
+
+  const createPhase = async () => {
+    if (!selectedProjectId || !newPhaseName.trim()) return;
+    setSavingPhase(true);
+    const nextIndex = phases.length > 0 ? Math.max(...phases.map(p => p.order_index)) + 1 : 1;
+    const { data } = await supabase.from('phases').insert({
+      project_id: selectedProjectId,
+      name: newPhaseName.trim(),
+      order_index: nextIndex,
+      status: 'pending',
+    }).select().single();
+    if (data) {
+      setPhases(prev => [...prev, data as Phase]);
+      setNewPhaseName('');
+      setAddingPhase(false);
+    }
+    setSavingPhase(false);
+  };
+
+  const createTask = async (phaseId: string) => {
+    if (!selectedProjectId || !newTaskForm.name.trim()) return;
+    setSavingTask(true);
+    const worker = fieldWorkers.find(w => w.id === newTaskForm.assigned_to) ?? null;
+    const { data } = await supabase.from('tasks').insert({
+      phase_id: phaseId,
+      project_id: selectedProjectId,
+      name: newTaskForm.name.trim(),
+      status: 'pending',
+      assigned_to: worker?.id ?? undefined,
+      assigned_to_name: worker?.full_name ?? undefined,
+      assigned_by: worker ? (profile?.id ?? undefined) : undefined,
+      assigned_at: worker ? new Date().toISOString() : undefined,
+    }).select().single();
+    if (data) {
+      setTasks(prev => [...prev, data as Task]);
+      setNewTaskForm({ name: '', assigned_to: '' });
+      setAddingTaskForPhase(null);
+    }
+    setSavingTask(false);
   };
 
   // Lookup map for blocked_by task names
@@ -359,10 +405,11 @@ export function ProjectManagement() {
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
             </div>
-          ) : phases.length === 0 ? (
-            <p className="text-center py-12 text-neutral-400 text-sm">No phases added to this project yet.</p>
           ) : (
             <div className="space-y-6">
+              {phases.length === 0 && (
+                <p className="text-center py-8 text-neutral-400 text-sm">No phases yet — add the first one below.</p>
+              )}
               {phases.map((phase, phaseIdx) => {
                 const phaseTasks = tasks.filter(t => t.phase_id === phase.id);
                 const hasBlocked = phaseTasks.some(t => t.status === 'blocked');
@@ -518,11 +565,95 @@ export function ProjectManagement() {
                             })}
                           </div>
                         )}
+                        {addingTaskForPhase === phase.id ? (
+                          <div className="mt-3 p-3 bg-white border border-blue-200 rounded-lg">
+                            <div className="flex gap-2 mb-2">
+                              <input
+                                type="text"
+                                value={newTaskForm.name}
+                                onChange={e => setNewTaskForm(prev => ({ ...prev, name: e.target.value }))}
+                                placeholder="Task name..."
+                                autoFocus
+                                onKeyDown={e => { if (e.key === 'Enter') createTask(phase.id); }}
+                                className="flex-1 px-3 py-1.5 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                              <select
+                                value={newTaskForm.assigned_to}
+                                onChange={e => setNewTaskForm(prev => ({ ...prev, assigned_to: e.target.value }))}
+                                className="px-3 py-1.5 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                              >
+                                <option value="">Assign to…</option>
+                                {fieldWorkers.map(w => (
+                                  <option key={w.id} value={w.id}>{w.full_name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => { setAddingTaskForPhase(null); setNewTaskForm({ name: '', assigned_to: '' }); }}
+                                className="px-3 py-1 text-xs border border-neutral-200 rounded-lg hover:bg-neutral-50"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => createTask(phase.id)}
+                                disabled={!newTaskForm.name.trim() || savingTask}
+                                className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+                              >
+                                {savingTask && <Loader2 className="w-3 h-3 animate-spin" />}
+                                Add Task
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { setAddingTaskForPhase(phase.id); setNewTaskForm({ name: '', assigned_to: '' }); }}
+                            className="mt-3 flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 transition-colors"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Add Task
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
                 );
               })}
+              {addingPhase ? (
+                <div className="flex gap-2 pt-2">
+                  <input
+                    type="text"
+                    value={newPhaseName}
+                    onChange={e => setNewPhaseName(e.target.value)}
+                    placeholder="Phase name (e.g. Foundation, Roofing…)"
+                    autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter') createPhase(); }}
+                    className="flex-1 px-4 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={() => { setAddingPhase(false); setNewPhaseName(''); }}
+                    className="px-3 py-2 border border-neutral-200 rounded-lg hover:bg-neutral-50 text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={createPhase}
+                    disabled={!newPhaseName.trim() || savingPhase}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {savingPhase && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Add Phase
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setAddingPhase(true)}
+                  className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 transition-colors pt-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Phase
+                </button>
+              )}
             </div>
           )}
         </div>
