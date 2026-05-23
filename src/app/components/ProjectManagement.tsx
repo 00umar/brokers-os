@@ -124,6 +124,66 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Facility Management': 'bg-neutral-100 text-neutral-600',
 };
 
+const PHASE_TEMPLATES: Record<string, string[]> = {
+  'New Construction': [
+    'Site Preparation & Clearing',
+    'Foundation Works',
+    'Structural Frame / Block Laying',
+    'Roofing Works',
+    'Plumbing Installation',
+    'Electrical Installation',
+    'Plastering & Screeding',
+    'Tiling & Flooring',
+    'Painting & Finishing',
+    'External Works & Landscaping',
+    'Final Inspection & Handover',
+  ],
+  'Renovation': [
+    'Site Assessment & Planning',
+    'Demolition & Strip-out',
+    'Structural Repairs',
+    'Plumbing & Electrical Works',
+    'Plastering & Rendering',
+    'Tiling & Flooring',
+    'Painting & Decoration',
+    'Final Cleaning & Handover',
+  ],
+  'Interior Design & Fit-out': [
+    'Design & Mood Board Approval',
+    'Material Procurement',
+    'Flooring Installation',
+    'Ceiling & Lighting Works',
+    'Furniture & Joinery Installation',
+    'Decor & Accessories',
+    'Final Styling & Photography',
+  ],
+  'Property Development': [
+    'Land Acquisition & Survey',
+    'Planning & Regulatory Approvals',
+    'Site Preparation & Infrastructure',
+    'Construction Phase 1',
+    'Construction Phase 2',
+    'Finishing Works',
+    'Sales & Marketing Launch',
+    'Handover & Documentation',
+  ],
+  'Infrastructure & Services': [
+    'Site Survey & Planning',
+    'Material Procurement',
+    'Ground Works / Civil Works',
+    'Installation Works',
+    'Testing & Commissioning',
+    'Final Inspection & Sign-off',
+  ],
+  'Facility Management': [
+    'Initial Assessment & Audit',
+    'Work Order Scheduling',
+    'Service Execution',
+    'Quality Inspection',
+    'Documentation & Reporting',
+  ],
+};
+
 export function ProjectManagement() {
   const { profile } = useAuth();
 
@@ -251,20 +311,20 @@ export function ProjectManagement() {
     }
   };
 
-  const createPhase = async () => {
-    if (!selectedProjectId || !newPhaseName.trim()) return;
+  const createPhase = async (overrideName?: string) => {
+    const name = (overrideName ?? newPhaseName).trim();
+    if (!selectedProjectId || !name) return;
     setSavingPhase(true);
     const nextIndex = phases.length > 0 ? Math.max(...phases.map(p => p.order_index)) + 1 : 1;
     const { data } = await supabase.from('phases').insert({
       project_id: selectedProjectId,
-      name: newPhaseName.trim(),
+      name,
       order_index: nextIndex,
       status: 'pending',
     }).select().single();
     if (data) {
       setPhases(prev => [...prev, data as Phase]);
-      setNewPhaseName('');
-      setAddingPhase(false);
+      if (!overrideName) setNewPhaseName('');
     }
     setSavingPhase(false);
   };
@@ -293,6 +353,10 @@ export function ProjectManagement() {
 
   // Lookup map for blocked_by task names
   const taskNameMap = new Map(tasks.map(t => [t.id, t.name]));
+
+  // Suggested phases based on project category (type stored as "Category: Sub-type")
+  const projectCategory = selectedProject?.type?.split(':')[0]?.trim() ?? '';
+  const suggestedPhases = PHASE_TEMPLATES[projectCategory] ?? [];
 
   // Metrics computed from real data
   const metrics = [
@@ -724,29 +788,64 @@ export function ProjectManagement() {
                 );
               })}
               {addingPhase ? (
-                <div className="flex gap-2 pt-2">
-                  <input
-                    type="text"
-                    value={newPhaseName}
-                    onChange={e => setNewPhaseName(e.target.value)}
-                    placeholder="Phase name (e.g. Foundation, Roofing…)"
-                    autoFocus
-                    onKeyDown={e => { if (e.key === 'Enter') createPhase(); }}
-                    className="flex-1 px-4 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                <div className="mt-4 border border-neutral-200 rounded-xl p-4 bg-neutral-50 space-y-4">
+                  {suggestedPhases.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">Suggested phases</p>
+                      <div className="flex flex-wrap gap-2">
+                        {suggestedPhases.map(phaseName => {
+                          const alreadyAdded = phases.some(p => p.name === phaseName);
+                          return (
+                            <button
+                              key={phaseName}
+                              onClick={() => { if (!alreadyAdded) createPhase(phaseName); }}
+                              disabled={savingPhase}
+                              className={`px-3 py-1.5 text-sm rounded-lg border-2 transition-all flex items-center gap-1.5 ${
+                                alreadyAdded
+                                  ? 'border-green-200 bg-green-50 text-green-600 cursor-default'
+                                  : 'border-dashed border-neutral-300 text-neutral-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-50'
+                              }`}
+                            >
+                              {alreadyAdded
+                                ? <CheckCircle2 className="w-3.5 h-3.5" />
+                                : <Plus className="w-3.5 h-3.5" />
+                              }
+                              {phaseName}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    {suggestedPhases.length > 0 && (
+                      <p className="text-xs text-neutral-400 mb-2">Or add a custom phase:</p>
+                    )}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newPhaseName}
+                        onChange={e => setNewPhaseName(e.target.value)}
+                        placeholder="Custom phase name…"
+                        autoFocus={suggestedPhases.length === 0}
+                        onKeyDown={e => { if (e.key === 'Enter') createPhase(); }}
+                        className="flex-1 px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      />
+                      <button
+                        onClick={() => createPhase()}
+                        disabled={!newPhaseName.trim() || savingPhase}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm disabled:opacity-50 flex items-center gap-1.5"
+                      >
+                        {savingPhase && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        Add
+                      </button>
+                    </div>
+                  </div>
                   <button
                     onClick={() => { setAddingPhase(false); setNewPhaseName(''); }}
-                    className="px-3 py-2 border border-neutral-200 rounded-lg hover:bg-neutral-50 text-sm"
+                    className="text-xs text-neutral-400 hover:text-neutral-600 transition-colors"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={createPhase}
-                    disabled={!newPhaseName.trim() || savingPhase}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {savingPhase && <Loader2 className="w-4 h-4 animate-spin" />}
-                    Add Phase
+                    Done adding phases
                   </button>
                 </div>
               ) : (
