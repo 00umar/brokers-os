@@ -219,6 +219,7 @@ export function BrokerageOperations() {
       deal_id: selectedDeal.id,
       content: dealNote.trim(),
       author_name: profile?.full_name ?? 'Broker',
+      stage_at_time: selectedDeal.stage,
     }).select().single();
     if (data) setDealNotes(p => [data, ...p]);
     setDealNote('');
@@ -1073,7 +1074,14 @@ export function BrokerageOperations() {
                     {dealNotes.map(note => (
                       <div key={note.id} className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                         <p className="text-sm text-amber-900">{note.content}</p>
-                        <p className="text-xs text-amber-600 mt-1">{note.author_name} · {new Date(note.created_at).toLocaleDateString()}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <p className="text-xs text-amber-600">{note.author_name} · {new Date(note.created_at).toLocaleDateString()}</p>
+                          {note.stage_at_time && (
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${STAGE_BADGE[note.stage_at_time]}`}>
+                              {note.stage_at_time}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1182,7 +1190,14 @@ export function BrokerageOperations() {
                     {clientNotes.map(note => (
                       <div key={note.id} className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                         <p className="text-sm text-amber-900">{note.content}</p>
-                        <p className="text-xs text-amber-600 mt-1">{note.author_name} · {new Date(note.created_at).toLocaleDateString()}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <p className="text-xs text-amber-600">{note.author_name} · {new Date(note.created_at).toLocaleDateString()}</p>
+                          {note.stage_at_time && (
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${STAGE_BADGE[note.stage_at_time]}`}>
+                              {note.stage_at_time}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

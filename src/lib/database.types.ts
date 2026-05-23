@@ -49,6 +49,7 @@ export interface BrokerNote {
   content: string
   author_id?: string
   author_name?: string
+  stage_at_time?: DealStage
   created_at: string
 }
 
