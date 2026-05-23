@@ -13,6 +13,7 @@ export interface Profile {
   email: string
   phone?: string
   department?: string
+  status?: 'pending' | 'active' | 'suspended'
   created_at: string
 }
 

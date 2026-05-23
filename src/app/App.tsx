@@ -10,13 +10,14 @@ import { SalesMarketing } from './components/SalesMarketing';
 import { ProjectManagement } from './components/ProjectManagement';
 import { WorkforceKPI } from './components/WorkforceKPI';
 import { FieldOperations } from './components/FieldOperations';
+import { PendingApproval } from './components/PendingApproval';
 import Login from './components/Login';
 import ClientAuth from './components/ClientAuth';
 import ClientDashboard from './components/ClientDashboard';
 
 // ── Staff protected routes ──────────────────────────────────────────────────
 function ProtectedRoutes() {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
 
   if (loading) {
     return (
@@ -27,6 +28,11 @@ function ProtectedRoutes() {
   }
 
   if (!user) return <Navigate to="/login" replace />;
+
+  // Block pending or suspended accounts — only applies once status column exists
+  if (profile?.status && profile.status !== 'active') {
+    return <PendingApproval status={profile.status} />;
+  }
 
   return (
     <Routes>

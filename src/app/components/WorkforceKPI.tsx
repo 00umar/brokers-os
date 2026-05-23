@@ -65,6 +65,7 @@ export function WorkforceKPI() {
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [expandedProfile, setExpandedProfile] = useState<string | null>(null);
   const [updatingRole, setUpdatingRole] = useState<string | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [formData, setFormData] = useState({ hoursWorked: '', incidentNotes: '' });
 
@@ -200,8 +201,18 @@ export function WorkforceKPI() {
     setUpdatingRole(null);
   };
 
+  const updateStatus = async (profileId: string, newStatus: 'active' | 'suspended') => {
+    setUpdatingStatus(profileId);
+    await supabase.from('profiles').update({ status: newStatus }).eq('id', profileId);
+    setProfiles(prev => prev.map(p =>
+      p.id === profileId ? { ...p, status: newStatus } : p
+    ));
+    setUpdatingStatus(null);
+  };
+
   const pendingReports = reports.filter(r => r.status === 'pending-review').length;
-  const workforceCount = profiles.filter(p => p.role !== 'client').length;
+  const pendingStaff = profiles.filter(p => p.status === 'pending').length;
+  const workforceCount = profiles.filter(p => p.role !== 'client' && p.status === 'active').length;
   const totalDone = allTasks.filter(t => t.status === 'done').length;
 
   const metrics = [
@@ -220,6 +231,7 @@ export function WorkforceKPI() {
 
   const workerProfiles = profiles.filter(p =>
     p.role !== 'client' &&
+    (!p.status || p.status === 'active') &&
     (p.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
      p.email.toLowerCase().includes(searchQuery.toLowerCase()))
   );
@@ -282,6 +294,11 @@ export function WorkforceKPI() {
               {tab.id === 'reports' && pendingReports > 0 && (
                 <span className="ml-2 px-1.5 py-0.5 text-xs bg-orange-100 text-orange-700 rounded-full">
                   {pendingReports}
+                </span>
+              )}
+              {tab.id === 'staff' && pendingStaff > 0 && (
+                <span className="ml-2 px-1.5 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded-full">
+                  {pendingStaff}
                 </span>
               )}
             </button>
@@ -506,9 +523,9 @@ export function WorkforceKPI() {
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3">
             <Shield className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-800">
-              <p className="font-medium mb-0.5">How workers get access</p>
+              <p className="font-medium mb-0.5">Staff account approval</p>
               <p className="text-blue-700">
-                Workers register themselves on the app's login page. Once they sign up their profile appears here — assign them the right role to give them access to the correct module.
+                New staff register on the login page. Their account starts as <strong>Pending</strong> and cannot access the CRM until an admin approves it here. Set their role at the same time.
               </p>
             </div>
           </div>
@@ -519,10 +536,18 @@ export function WorkforceKPI() {
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
-              {profiles.filter(p =>
-                p.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                p.email.toLowerCase().includes(searchQuery.toLowerCase())
-              ).map((p, idx, arr) => {
+              {profiles
+                .filter(p =>
+                  p.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  p.email.toLowerCase().includes(searchQuery.toLowerCase())
+                )
+                .sort((a, b) => {
+                  const order = { pending: 0, active: 1, suspended: 2 };
+                  const sa = order[a.status ?? 'active'] ?? 1;
+                  const sb = order[b.status ?? 'active'] ?? 1;
+                  return sa - sb;
+                })
+              .map((p, idx, arr) => {
                 const stats = getWorkerStats(p.id);
                 const workerReports = reports.filter(r => r.worker_id === p.id);
                 const initials = p.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -530,16 +555,27 @@ export function WorkforceKPI() {
                 return (
                   <div key={p.id} className={idx < arr.length - 1 ? 'border-b border-neutral-100' : ''}>
                     {/* Profile row */}
-                    <div className="p-5 flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-medium flex-shrink-0">
+                    <div className={`p-5 flex items-center gap-4 ${
+                      p.status === 'pending' ? 'bg-yellow-50 border-l-4 border-l-yellow-400' :
+                      p.status === 'suspended' ? 'bg-red-50 border-l-4 border-l-red-400' : ''
+                    }`}>
+                      <div className={`w-10 h-10 rounded-full text-white flex items-center justify-center text-sm font-medium flex-shrink-0 ${
+                        p.status === 'suspended' ? 'bg-neutral-400' : 'bg-blue-600'
+                      }`}>
                         {initials}
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
+                        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                           <p className="text-sm font-medium text-neutral-900 truncate">{p.full_name}</p>
                           {p.id === profile?.id && (
                             <span className="text-xs bg-neutral-100 text-neutral-500 px-2 py-0.5 rounded-full flex-shrink-0">You</span>
+                          )}
+                          {p.status === 'pending' && (
+                            <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full flex-shrink-0 font-medium">Pending</span>
+                          )}
+                          {p.status === 'suspended' && (
+                            <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full flex-shrink-0 font-medium">Suspended</span>
                           )}
                         </div>
                         <p className="text-xs text-neutral-400 truncate">{p.email}</p>
@@ -556,7 +592,7 @@ export function WorkforceKPI() {
                           <select
                             value={p.role}
                             onChange={e => updateRole(p.id, e.target.value)}
-                            disabled={updatingRole === p.id}
+                            disabled={updatingRole === p.id || p.status === 'pending'}
                             className={`pl-3 pr-7 py-1.5 text-xs rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer appearance-none ${ROLE_COLORS[p.role]}`}
                           >
                             <option value="admin">Admin</option>
@@ -575,6 +611,42 @@ export function WorkforceKPI() {
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${ROLE_COLORS[p.role]}`}>
                           {ROLE_LABELS[p.role]}
                         </span>
+                      )}
+
+                      {/* Approve / Suspend / Reactivate — admin only, not own profile */}
+                      {isAdmin && p.id !== profile?.id && (
+                        <>
+                          {p.status === 'pending' && (
+                            <button
+                              onClick={() => updateStatus(p.id, 'active')}
+                              disabled={updatingStatus === p.id}
+                              className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1.5 flex-shrink-0 disabled:opacity-50"
+                            >
+                              {updatingStatus === p.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                              Approve
+                            </button>
+                          )}
+                          {p.status === 'active' && (
+                            <button
+                              onClick={() => updateStatus(p.id, 'suspended')}
+                              disabled={updatingStatus === p.id}
+                              className="px-3 py-1.5 border border-red-200 text-red-600 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors flex items-center gap-1.5 flex-shrink-0 disabled:opacity-50"
+                            >
+                              {updatingStatus === p.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                              Suspend
+                            </button>
+                          )}
+                          {p.status === 'suspended' && (
+                            <button
+                              onClick={() => updateStatus(p.id, 'active')}
+                              disabled={updatingStatus === p.id}
+                              className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 flex-shrink-0 disabled:opacity-50"
+                            >
+                              {updatingStatus === p.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                              Reactivate
+                            </button>
+                          )}
+                        </>
                       )}
 
                       <button
