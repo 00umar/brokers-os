@@ -252,15 +252,15 @@ export function FieldOperations() {
 
         <div className="grid grid-cols-3 gap-2">
           <div className="bg-blue-50 rounded-lg p-3 text-center">
-            <p className="text-xl font-semibold text-blue-900">{activeTasks.length}</p>
+            <p className="text-lg font-semibold text-blue-900">{activeTasks.length}</p>
             <p className="text-xs text-blue-600">Active</p>
           </div>
           <div className="bg-green-50 rounded-lg p-3 text-center">
-            <p className="text-xl font-semibold text-green-900">{completedTasks.length}</p>
+            <p className="text-lg font-semibold text-green-900">{completedTasks.length}</p>
             <p className="text-xs text-green-600">Done Today</p>
           </div>
           <div className="bg-orange-50 rounded-lg p-3 text-center">
-            <p className="text-xl font-semibold text-orange-900">
+            <p className="text-lg font-semibold text-orange-900">
               {activeTasks.filter(t => t.status === 'blocked').length}
             </p>
             <p className="text-xs text-orange-600">Blocked</p>

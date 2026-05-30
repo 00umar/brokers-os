@@ -107,6 +107,8 @@ export interface Phase {
   name: string
   order_index: number
   status: 'pending' | 'in-progress' | 'completed'
+  start_date?: string
+  end_date?: string
   created_at: string
   tasks?: Task[]
 }
@@ -123,6 +125,9 @@ export interface Task {
   assigned_at?: string
   blocked_by?: string
   notes?: string
+  due_date?: string
+  priority?: 'low' | 'medium' | 'high'
+  deliverables?: string
   created_at: string
   evidence?: TaskEvidence[]
 }

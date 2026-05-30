@@ -237,7 +237,7 @@ export function WorkforceKPI() {
   );
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -274,8 +274,8 @@ export function WorkforceKPI() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-neutral-200">
-        <div className="flex gap-6">
+      <div className="border-b border-neutral-200 overflow-x-auto">
+        <div className="flex gap-4 min-w-max">
           {[
             { id: 'overview', label: 'Employee Overview' },
             { id: 'reports', label: 'Weekly Reports' },
@@ -335,7 +335,7 @@ export function WorkforceKPI() {
             <div className="text-center py-16 text-neutral-400 text-sm">No staff found.</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[580px]">
                 <thead className="bg-neutral-50 border-b border-neutral-200">
                   <tr>
                     {['Employee', 'Role', 'Tasks', 'Performance', 'Reports Submitted'].map(h => (

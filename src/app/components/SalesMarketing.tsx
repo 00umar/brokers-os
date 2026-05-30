@@ -18,7 +18,7 @@ const LEAD_STATUS_COLORS: Record<string, string> = {
 };
 
 const LEAD_TYPES = ['Developer', 'Investor', 'Contractor', 'Agency', 'Corporate', 'Individual'];
-const LEAD_SOURCES = ['Referral', 'Cold Outreach', 'LinkedIn', 'Trade Show', 'Website', 'Walk-in'];
+const LEAD_SOURCES = ['Instagram', 'TikTok', 'Referral', 'Cold Outreach', 'LinkedIn', 'Trade Show', 'Website', 'Walk-in'];
 const LEAD_STATUSES: Lead['status'][] = ['new', 'contacted', 'qualified', 'converted', 'lost'];
 
 const PARTNER_STATUS_COLORS: Record<string, string> = {
@@ -38,8 +38,17 @@ const ACTIVITY_CONFIG: Record<string, { icon: any; color: string }> = {
 const TABS = [
   { id: 'leads', label: 'Business Leads' },
   { id: 'followups', label: 'Follow-ups' },
+  { id: 'social', label: 'Social Leads' },
   { id: 'partnerships', label: 'Partnerships' },
   { id: 'activity', label: 'Activity Log' },
+];
+
+const SOCIAL_LEADS = [
+  { id: 'SL-001', platform: 'instagram', name: 'Chukwuemeka Obi', property: 'Duplex — Lekki Phase 1', interaction: 'DM inquiry via story ad', timestamp: '2 hours ago', status: 'new' },
+  { id: 'SL-002', platform: 'tiktok', name: 'Fatima Abubakar', property: 'Studio Apartment — Abuja', interaction: 'Clicked link in bio + filled form', timestamp: '5 hours ago', status: 'new' },
+  { id: 'SL-003', platform: 'instagram', name: 'Adewale Fashola', property: '3-Bed Terrace — VGC', interaction: 'Liked ad + sent DM', timestamp: '1 day ago', status: 'contacted' },
+  { id: 'SL-004', platform: 'tiktok', name: 'Ngozi Eze', property: 'Investment Land — Epe', interaction: 'Completed lead gen form on TikTok', timestamp: '2 days ago', status: 'qualified' },
+  { id: 'SL-005', platform: 'instagram', name: 'Bashir Mohammed', property: 'Penthouse — Eko Atlantic', interaction: 'Saved post + profile visit', timestamp: '3 days ago', status: 'new' },
 ];
 
 // Static until DB tables are added
@@ -81,12 +90,19 @@ export function SalesMarketing() {
   // Status dropdown
   const [statusMenuId, setStatusMenuId] = useState<string | null>(null);
 
+  // Lead detail modal
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+
   // Convert to deal
   const [convertingLead, setConvertingLead] = useState<Lead | null>(null);
   const [convertClientType, setConvertClientType] = useState<'buyer' | 'seller' | 'investor'>('buyer');
   const [convertDealTitle, setConvertDealTitle] = useState('');
   const [converting, setConverting] = useState(false);
   const [convertSuccess, setConvertSuccess] = useState(false);
+
+  // Social leads simulation
+  const [addedSocialLeadIds, setAddedSocialLeadIds] = useState<Set<string>>(new Set());
+  const [addingSocialLeadId, setAddingSocialLeadId] = useState<string | null>(null);
 
   // Follow-ups
   const [followUpFilter, setFollowUpFilter] = useState<'all' | 'pending' | 'completed'>('all');
@@ -179,6 +195,23 @@ export function SalesMarketing() {
     setConvertSuccess(true);
   }
 
+  // ── Social lead simulation ────────────────────────────────────────────────
+
+  async function addSocialLead(socialLead: typeof SOCIAL_LEADS[0]) {
+    setAddingSocialLeadId(socialLead.id);
+    const { data } = await supabase.from('leads').insert({
+      name: socialLead.name,
+      source: socialLead.platform === 'instagram' ? 'Instagram' : 'TikTok',
+      notes: `${socialLead.interaction} — interested in: ${socialLead.property}`,
+      status: socialLead.status as Lead['status'],
+    }).select().single();
+    if (data) {
+      setLeads(prev => [data as Lead, ...prev]);
+      setAddedSocialLeadIds(prev => new Set([...prev, socialLead.id]));
+    }
+    setAddingSocialLeadId(null);
+  }
+
   // ── Task handlers ─────────────────────────────────────────────────────────
 
   async function completeTask(id: string) {
@@ -225,7 +258,7 @@ export function SalesMarketing() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -263,8 +296,8 @@ export function SalesMarketing() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-neutral-200">
-        <div className="flex gap-6">
+      <div className="border-b border-neutral-200 overflow-x-auto">
+        <div className="flex gap-4 min-w-max">
           {TABS.map((tab) => (
             <button
               key={tab.id}
@@ -314,7 +347,7 @@ export function SalesMarketing() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-[560px]">
                   <thead className="bg-neutral-50 border-b border-neutral-200">
                     <tr>
                       <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Lead / Contact</th>
@@ -329,7 +362,7 @@ export function SalesMarketing() {
                       const isConverted = lead.status === 'converted' || lead.status === 'lost';
                       const isOverdue = lead.follow_up_date && new Date(lead.follow_up_date) < new Date() && !isConverted;
                       return (
-                        <tr key={lead.id} className="hover:bg-neutral-50 transition-colors">
+                        <tr key={lead.id} onClick={() => setSelectedLead(lead)} className="hover:bg-neutral-50 transition-colors cursor-pointer">
                           <td className="px-5 py-4">
                             <p className="text-sm font-medium text-neutral-900">{lead.name}</p>
                             {lead.contact_name && <p className="text-xs text-neutral-500 mt-0.5">{lead.contact_name}</p>}
@@ -353,28 +386,9 @@ export function SalesMarketing() {
                             {lead.source && <p className="text-xs text-neutral-500 mt-1">via {lead.source}</p>}
                           </td>
                           <td className="px-5 py-4">
-                            <div className="relative">
-                              <button
-                                onClick={() => setStatusMenuId(statusMenuId === lead.id ? null : lead.id)}
-                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium capitalize ${LEAD_STATUS_COLORS[lead.status] ?? 'bg-gray-100 text-gray-700'}`}
-                              >
-                                {lead.status}
-                                <MoreVertical className="w-3 h-3" />
-                              </button>
-                              {statusMenuId === lead.id && (
-                                <div className="absolute top-full left-0 mt-1 bg-white border border-neutral-200 rounded-lg shadow-lg z-10 py-1 min-w-[130px]">
-                                  {LEAD_STATUSES.map(s => (
-                                    <button
-                                      key={s}
-                                      onClick={() => updateLeadStatus(lead.id, s)}
-                                      className={`w-full text-left px-3 py-1.5 text-xs capitalize hover:bg-neutral-50 ${lead.status === s ? 'font-semibold' : ''}`}
-                                    >
-                                      {s}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium capitalize ${LEAD_STATUS_COLORS[lead.status] ?? 'bg-gray-100 text-gray-700'}`}>
+                              {lead.status}
+                            </span>
                           </td>
                           <td className="px-5 py-4">
                             {lead.follow_up_date ? (
@@ -390,7 +404,7 @@ export function SalesMarketing() {
                           <td className="px-5 py-4">
                             {!isConverted ? (
                               <button
-                                onClick={() => openConvert(lead)}
+                                onClick={e => { e.stopPropagation(); openConvert(lead); }}
                                 className="flex items-center gap-1 px-3 py-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-medium"
                               >
                                 <ArrowUpRight className="w-3.5 h-3.5" />
@@ -492,6 +506,94 @@ export function SalesMarketing() {
               );
             })
           )}
+        </div>
+      )}
+
+      {/* ── SOCIAL LEADS ── */}
+      {activeTab === 'social' && (
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-3">
+            <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span className="text-white text-xs font-bold">i</span>
+            </div>
+            <p className="text-sm text-blue-800">
+              <span className="font-medium">Simulation mode.</span> These are mock leads previewing what Instagram and TikTok integration will look like. Click <span className="font-medium">Add as Lead</span> on any row — it will create a real lead in Business Leads. Once API credentials are connected, leads will appear here automatically.
+            </p>
+          </div>
+
+          <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden overflow-x-auto">
+            <table className="w-full min-w-[600px]">
+              <thead className="bg-neutral-50 border-b border-neutral-200">
+                <tr>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Platform</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Lead</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Property Interest</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Interaction</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Status</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {SOCIAL_LEADS.map(lead => {
+                  const isAdded = addedSocialLeadIds.has(lead.id);
+                  const isAdding = addingSocialLeadId === lead.id;
+                  return (
+                  <tr key={lead.id} className={`transition-colors ${isAdded ? 'bg-green-50/40' : 'hover:bg-neutral-50'}`}>
+                    <td className="px-5 py-4">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                        lead.platform === 'instagram'
+                          ? 'bg-pink-100 text-pink-700'
+                          : 'bg-neutral-900 text-white'
+                      }`}>
+                        {lead.platform === 'instagram' ? 'Instagram' : 'TikTok'}
+                      </span>
+                      <p className="text-xs text-neutral-400 mt-1">{lead.timestamp}</p>
+                    </td>
+                    <td className="px-5 py-4">
+                      <p className="text-sm font-medium text-neutral-900">{lead.name}</p>
+                    </td>
+                    <td className="px-5 py-4">
+                      <p className="text-sm text-neutral-700">{lead.property}</p>
+                    </td>
+                    <td className="px-5 py-4">
+                      <p className="text-xs text-neutral-500">{lead.interaction}</p>
+                    </td>
+                    <td className="px-5 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium capitalize ${LEAD_STATUS_COLORS[lead.status] ?? 'bg-gray-100 text-gray-700'}`}>
+                        {lead.status}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4">
+                      {isAdded ? (
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2.5 py-1 rounded-lg font-medium">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Added
+                          </span>
+                          <button
+                            onClick={() => setActiveTab('leads')}
+                            className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors"
+                          >
+                            View <ArrowUpRight className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => addSocialLead(lead)}
+                          disabled={isAdding}
+                          className="text-xs px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium flex items-center gap-1.5 disabled:opacity-60"
+                        >
+                          {isAdding && <Loader2 className="w-3 h-3 animate-spin" />}
+                          Add as Lead
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -797,6 +899,104 @@ export function SalesMarketing() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Lead Detail Modal */}
+      {selectedLead && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-neutral-200 flex items-start justify-between sticky top-0 bg-white">
+              <div>
+                <h2 className="text-lg font-semibold text-neutral-900">{selectedLead.name}</h2>
+                {selectedLead.contact_name && (
+                  <p className="text-sm text-neutral-500 mt-0.5">Contact: {selectedLead.contact_name}</p>
+                )}
+              </div>
+              <button onClick={() => setSelectedLead(null)} className="p-2 hover:bg-neutral-100 rounded-lg transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Contact info */}
+              <div className="grid grid-cols-2 gap-3">
+                {selectedLead.email && (
+                  <div className="flex items-center gap-2 text-sm text-neutral-700">
+                    <Mail className="w-4 h-4 text-neutral-400 flex-shrink-0" />
+                    <span className="truncate">{selectedLead.email}</span>
+                  </div>
+                )}
+                {selectedLead.phone && (
+                  <div className="flex items-center gap-2 text-sm text-neutral-700">
+                    <Phone className="w-4 h-4 text-neutral-400 flex-shrink-0" />
+                    <span>{selectedLead.phone}</span>
+                  </div>
+                )}
+                {selectedLead.lead_type && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-700 font-medium">{selectedLead.lead_type}</span>
+                  </div>
+                )}
+                {selectedLead.source && (
+                  <div className="text-sm text-neutral-500">via {selectedLead.source}</div>
+                )}
+              </div>
+
+              {selectedLead.follow_up_date && (
+                <div className="flex items-center gap-2 text-sm text-neutral-600">
+                  <Calendar className="w-4 h-4 text-neutral-400" />
+                  Follow-up: {new Date(selectedLead.follow_up_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </div>
+              )}
+
+              {selectedLead.notes && (
+                <div className="bg-neutral-50 rounded-lg px-4 py-3">
+                  <p className="text-xs font-medium text-neutral-500 mb-1">Notes</p>
+                  <p className="text-sm text-neutral-700">{selectedLead.notes}</p>
+                </div>
+              )}
+
+              {/* Status change */}
+              <div>
+                <p className="text-xs font-medium text-neutral-500 mb-2 uppercase tracking-wide">Change Status</p>
+                <div className="flex flex-wrap gap-2">
+                  {LEAD_STATUSES.map(s => (
+                    <button
+                      key={s}
+                      onClick={() => { updateLeadStatus(selectedLead.id, s); setSelectedLead(l => l ? { ...l, status: s } : null); }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize border-2 transition-colors ${
+                        selectedLead.status === s
+                          ? 'border-neutral-900 bg-neutral-900 text-white'
+                          : 'border-neutral-200 text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-2 border-t border-neutral-100">
+                <button
+                  onClick={() => setSelectedLead(null)}
+                  className="flex-1 px-4 py-2.5 border border-neutral-200 rounded-lg text-sm hover:bg-neutral-50 transition-colors"
+                >
+                  Close
+                </button>
+                {!['converted', 'lost'].includes(selectedLead.status) && (
+                  <button
+                    onClick={() => { setSelectedLead(null); openConvert(selectedLead); }}
+                    className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <ArrowUpRight className="w-4 h-4" />
+                    Convert to Deal
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

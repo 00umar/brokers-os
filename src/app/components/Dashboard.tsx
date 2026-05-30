@@ -149,7 +149,7 @@ export function Dashboard() {
   ];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       {/* Page Header */}
       <div>
         <h1 className="text-2xl font-semibold text-neutral-900">Dashboard</h1>
@@ -193,14 +193,14 @@ export function Dashboard() {
       </div>
 
       {/* Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Active Brokerage Requests */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-neutral-200">
           <div className="p-5 border-b border-neutral-200">
             <h2 className="text-lg font-semibold text-neutral-900">Active Brokerage Requests</h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[480px]">
               <thead className="bg-neutral-50 border-b border-neutral-200">
                 <tr>
                   <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
@@ -275,7 +275,7 @@ export function Dashboard() {
       </div>
 
       {/* Active Projects & Upcoming Inspections */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         {/* Active Projects */}
         <div className="bg-white rounded-xl border border-neutral-200">
           <div className="p-5 border-b border-neutral-200">

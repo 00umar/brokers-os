@@ -14,6 +14,8 @@ import { PendingApproval } from './components/PendingApproval';
 import Login from './components/Login';
 import ClientAuth from './components/ClientAuth';
 import ClientDashboard from './components/ClientDashboard';
+import { TeamManagement } from './components/TeamManagement';
+import AcceptInvite from './components/AcceptInvite';
 
 // ── Staff protected routes ──────────────────────────────────────────────────
 function ProtectedRoutes() {
@@ -43,6 +45,7 @@ function ProtectedRoutes() {
         <Route path="projects" element={<ProjectManagement />} />
         <Route path="workforce" element={<WorkforceKPI />} />
         <Route path="field" element={<FieldOperations />} />
+        <Route path="settings" element={<TeamManagement />} />
       </Route>
     </Routes>
   );
@@ -100,6 +103,7 @@ export default function App() {
           <Route path="/login" element={<AuthGate />} />
           <Route path="/client/login" element={<ClientAuthGate />} />
           <Route path="/client/dashboard" element={<ClientPortalRoute />} />
+          <Route path="/accept-invite" element={<AcceptInvite />} />
           <Route path="/app/*" element={<ProtectedRoutes />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

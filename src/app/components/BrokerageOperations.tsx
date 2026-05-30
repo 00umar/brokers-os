@@ -3,7 +3,7 @@ import {
   Plus, Search, DollarSign, MapPin, Phone, Mail, Building2, X,
   Send, Home, ShieldCheck, TrendingUp, Banknote, Loader2,
   CheckCircle2, Star, StarOff, Trash2, Edit3, Tag, BedDouble, Bath,
-  ClipboardList, Check, MoreVertical,
+  ClipboardList, Check, MoreVertical, Upload,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -87,6 +87,7 @@ export function BrokerageOperations() {
   const [dealNote, setDealNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [changingStage, setChangingStage] = useState(false);
+  const [pipelineStageFilter, setPipelineStageFilter] = useState<DealStage | 'all'>('all');
 
   // Sales support
   const [dealSalesTasks, setDealSalesTasks] = useState<SalesTask[]>([]);
@@ -113,6 +114,7 @@ export function BrokerageOperations() {
   const [listingForm, setListingForm] = useState({ ...emptyListing });
   const [savingListing, setSavingListing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Log inquiry modal
   const [showLogInquiry, setShowLogInquiry] = useState(false);
@@ -307,6 +309,7 @@ export function BrokerageOperations() {
         stage: 'new' as DealStage,
         property_type: intake.property_type || undefined,
         location: intake.location || undefined,
+        payment_status: 'pending',
       });
     }
     await supabase.from('intake_requests').update({ status: 'in-progress' }).eq('id', intake.id);
@@ -385,6 +388,18 @@ export function BrokerageOperations() {
     setListings(p => p.map(l => l.id === listing.id ? { ...l, status } : l));
   }
 
+  async function uploadListingImage(file: File) {
+    setUploadingImage(true);
+    const ext = file.name.split('.').pop();
+    const path = `${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('listing-images').upload(path, file, { upsert: true });
+    if (!error) {
+      const { data } = supabase.storage.from('listing-images').getPublicUrl(path);
+      setListingForm(f => ({ ...f, image_url: data.publicUrl }));
+    }
+    setUploadingImage(false);
+  }
+
   // ── New request handler ───────────────────────────────────────────────────
 
   async function createRequest() {
@@ -403,6 +418,7 @@ export function BrokerageOperations() {
         stage: 'new' as DealStage,
         property_type: newReq.property_category || undefined,
         location: newReq.location || undefined,
+        payment_status: 'pending',
       });
     }
     setSubmittingReq(false);
@@ -444,6 +460,12 @@ export function BrokerageOperations() {
   // ── Derived ───────────────────────────────────────────────────────────────
 
   const allDeals = Object.values(dealsByStage).flat();
+  const pipelineDeals = allDeals
+    .filter(d => pipelineStageFilter === 'all' || d.stage === pipelineStageFilter)
+    .filter(d => !searchQuery ||
+      d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (d.location?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
+    );
   const newIntakeCount = intakes.filter(i => i.status === 'new').length;
 
   const filteredClients = clients.filter(c =>
@@ -468,7 +490,7 @@ export function BrokerageOperations() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
 
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -547,71 +569,118 @@ export function BrokerageOperations() {
             <Loader2 className="w-6 h-6 animate-spin text-neutral-400" />
           </div>
         ) : (
-          <div className="overflow-x-auto pb-4">
-            <div className="flex gap-4 min-w-max">
+          <div className="space-y-3">
+            {/* Stage filter chips */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setPipelineStageFilter('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  pipelineStageFilter === 'all'
+                    ? 'bg-neutral-900 text-white'
+                    : 'bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50'
+                }`}
+              >
+                All ({allDeals.length})
+              </button>
               {PIPELINE_STAGES.map(stage => {
-                const stageDeals = (dealsByStage[stage.id] ?? []).filter(d =>
-                  !searchQuery ||
-                  d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  (d.location?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
-                );
+                const count = dealsByStage[stage.id]?.length ?? 0;
                 return (
-                  <div key={stage.id} className="w-72 flex-shrink-0">
-                    <div className={`${STAGE_COL[stage.id]} rounded-lg p-3 mb-3`}>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-medium text-neutral-900 text-sm">{stage.name}</h3>
-                        <span className="px-2 py-0.5 bg-white text-neutral-700 rounded-full text-xs font-medium">
-                          {dealsByStage[stage.id]?.length ?? 0}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      {stageDeals.length === 0 ? (
-                        <div className="bg-white rounded-lg border border-dashed border-neutral-200 p-6 text-center">
-                          <p className="text-xs text-neutral-400">No deals</p>
-                        </div>
-                      ) : stageDeals.map(deal => (
-                        <div
-                          key={deal.id}
-                          onClick={() => openDeal(deal)}
-                          className="bg-white rounded-lg border border-neutral-200 p-4 hover:shadow-md transition-all cursor-pointer"
-                        >
-                          <p className="text-sm font-semibold text-neutral-900 leading-tight mb-0.5">{deal.title}</p>
-                          {deal.property_type && (
-                            <p className="text-xs text-neutral-400 mb-2">{deal.property_type}</p>
-                          )}
-                          <div className="space-y-1">
-                            {deal.location && (
-                              <div className="flex items-center gap-1.5 text-xs text-neutral-500">
-                                <MapPin className="w-3 h-3 flex-shrink-0" />
-                                <span className="truncate">{deal.location}</span>
-                              </div>
-                            )}
-                            {(deal.budget_min || deal.budget_max) && (
-                              <div className="flex items-center gap-1.5 text-xs text-neutral-500">
-                                <DollarSign className="w-3 h-3 flex-shrink-0" />
-                                {deal.budget_min ? `₦${(deal.budget_min / 1e6).toFixed(1)}M` : ''}
-                                {deal.budget_min && deal.budget_max ? ' – ' : ''}
-                                {deal.budget_max ? `₦${(deal.budget_max / 1e6).toFixed(1)}M` : ''}
-                              </div>
-                            )}
-                          </div>
-                          {deal.payment_status === 'pending' && (
-                            <span className="mt-2 inline-flex text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-                              Fee pending
-                            </span>
-                          )}
-                          {deal.payment_status === 'paid' && (
-                            <span className="mt-2 inline-flex text-xs text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                              Fee paid
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <button
+                    key={stage.id}
+                    onClick={() => setPipelineStageFilter(stage.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      pipelineStageFilter === stage.id
+                        ? 'bg-neutral-900 text-white'
+                        : 'bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50'
+                    }`}
+                  >
+                    {stage.name}{count > 0 ? ` (${count})` : ''}
+                  </button>
                 );
               })}
+            </div>
+
+            {/* Deals table */}
+            <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+              {pipelineDeals.length === 0 ? (
+                <div className="p-12 text-center">
+                  <p className="text-sm text-neutral-400">No deals found.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[620px]">
+                    <thead className="bg-neutral-50 border-b border-neutral-200">
+                      <tr>
+                        <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Deal</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Client</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Stage</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Budget</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Location</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Payment</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100">
+                      {pipelineDeals.map(deal => {
+                        const client = clients.find(c => c.id === deal.client_id);
+                        return (
+                          <tr
+                            key={deal.id}
+                            onClick={() => openDeal(deal)}
+                            className="hover:bg-neutral-50 transition-colors cursor-pointer"
+                          >
+                            <td className="px-5 py-4">
+                              <p className="text-sm font-medium text-neutral-900">{deal.title}</p>
+                              {deal.property_type && (
+                                <p className="text-xs text-neutral-400 mt-0.5">{deal.property_type}</p>
+                              )}
+                            </td>
+                            <td className="px-5 py-4">
+                              {client ? (
+                                <div>
+                                  <p className="text-sm text-neutral-900">{client.name}</p>
+                                  {client.type && (
+                                    <span className={`inline-flex text-xs px-2 py-0.5 rounded-full mt-0.5 font-medium capitalize ${CLIENT_TYPE_COLOR[client.type] ?? 'bg-gray-100 text-gray-700'}`}>
+                                      {client.type}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-neutral-400">—</span>
+                              )}
+                            </td>
+                            <td className="px-5 py-4">
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium capitalize ${STAGE_BADGE[deal.stage]}`}>
+                                {deal.stage}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 text-sm text-neutral-700">
+                              {deal.budget_min || deal.budget_max ? (
+                                <>
+                                  {deal.budget_min ? `₦${(deal.budget_min / 1e6).toFixed(1)}M` : ''}
+                                  {deal.budget_min && deal.budget_max ? ' – ' : ''}
+                                  {deal.budget_max ? `₦${(deal.budget_max / 1e6).toFixed(1)}M` : ''}
+                                </>
+                              ) : <span className="text-neutral-400">—</span>}
+                            </td>
+                            <td className="px-5 py-4 text-sm text-neutral-500">
+                              {deal.location ?? <span className="text-neutral-400">—</span>}
+                            </td>
+                            <td className="px-5 py-4">
+                              <span className={`inline-flex text-xs px-2.5 py-1 rounded-full font-medium ${
+                                deal.payment_status === 'paid'
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : 'bg-amber-100 text-amber-700'
+                              }`}>
+                                {deal.payment_status === 'paid' ? 'Fee paid' : 'Fee pending'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )
@@ -1438,13 +1507,37 @@ export function BrokerageOperations() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1.5">Image URL</label>
-                <input
-                  value={listingForm.image_url}
-                  onChange={e => setListingForm(f => ({ ...f, image_url: e.target.value }))}
-                  placeholder="https://..."
-                  className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <label className="block text-sm font-medium text-neutral-700 mb-1.5">Property Image</label>
+                {listingForm.image_url && (
+                  <div className="relative mb-2">
+                    <img
+                      src={listingForm.image_url}
+                      alt="Preview"
+                      className="w-full h-36 object-cover rounded-lg border border-neutral-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setListingForm(f => ({ ...f, image_url: '' }))}
+                      className="absolute top-1.5 right-1.5 p-1 bg-white rounded-full shadow border border-neutral-200 hover:bg-neutral-50"
+                    >
+                      <X className="w-3 h-3 text-neutral-500" />
+                    </button>
+                  </div>
+                )}
+                <label className="flex items-center gap-2 cursor-pointer px-3 py-2 border border-neutral-200 rounded-lg text-sm text-neutral-600 hover:bg-neutral-50 transition-colors w-full">
+                  {uploadingImage
+                    ? <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                    : <Upload className="w-4 h-4" />
+                  }
+                  <span>{uploadingImage ? 'Uploading…' : listingForm.image_url ? 'Replace image' : 'Upload image'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploadingImage}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) uploadListingImage(f); }}
+                  />
+                </label>
               </div>
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1.5">Description</label>
