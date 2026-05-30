@@ -174,7 +174,7 @@ export function Landing() {
             </Link>
             <Link
               to="/login"
-              className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors hidden sm:inline-flex"
+              className="text-blue-400 text-sm font-medium hover:text-white transition-colors sm:bg-blue-600 sm:hover:bg-blue-500 sm:text-white sm:px-4 sm:py-2 sm:rounded-lg"
             >
               Staff Login
             </Link>
