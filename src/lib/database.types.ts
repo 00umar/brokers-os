@@ -149,6 +149,7 @@ export interface WeeklyReport {
   week_start: string
   hours_worked?: number
   incident_notes?: string
+  worker_response?: string
   status: ReportStatus
   reviewed_by?: string
   reviewed_at?: string

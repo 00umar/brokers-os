@@ -69,6 +69,9 @@ export function WorkforceKPI() {
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [formData, setFormData] = useState({ hoursWorked: '', incidentNotes: '' });
+  const [selectedEmployee, setSelectedEmployee] = useState<Profile | null>(null);
+  const [workerResponses, setWorkerResponses] = useState<Record<string, string>>({});
+  const [submittingResponse, setSubmittingResponse] = useState<string | null>(null);
 
   const fetchProfiles = useCallback(async () => {
     setLoadingProfiles(true);
@@ -193,6 +196,17 @@ export function WorkforceKPI() {
     setApprovingId(null);
   };
 
+  const submitWorkerResponse = async (reportId: string) => {
+    const text = workerResponses[reportId]?.trim();
+    if (!text) return;
+    setSubmittingResponse(reportId);
+    await supabase.from('weekly_reports').update({ worker_response: text }).eq('id', reportId);
+    setReports(prev => prev.map(r =>
+      r.id === reportId ? { ...r, worker_response: text } : r
+    ));
+    setSubmittingResponse(null);
+  };
+
   const updateRole = async (profileId: string, newRole: string) => {
     setUpdatingRole(profileId);
     await supabase.from('profiles').update({ role: newRole }).eq('id', profileId);
@@ -215,6 +229,7 @@ export function WorkforceKPI() {
   const pendingStaff = profiles.filter(p => p.status === 'pending').length;
   const workforceCount = profiles.filter(p => p.role !== 'client' && p.status === 'active').length;
   const totalDone = allTasks.filter(t => t.status === 'done').length;
+  const visibleReports = isAdmin ? reports : reports.filter(r => r.worker_id === profile?.id);
 
   const metrics = [
     { label: 'Total Workforce', value: workforceCount, icon: Users, color: 'blue' },
@@ -352,7 +367,7 @@ export function WorkforceKPI() {
                     const reportCount = reports.filter(r => r.worker_id === p.id).length;
                     const initials = p.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
                     return (
-                      <tr key={p.id} className="hover:bg-neutral-50 transition-colors">
+                      <tr key={p.id} className="hover:bg-neutral-50 transition-colors cursor-pointer" onClick={() => setSelectedEmployee(p)}>
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-medium flex-shrink-0">
@@ -413,15 +428,35 @@ export function WorkforceKPI() {
       {/* ── Weekly Reports ── */}
       {activeTab === 'reports' && (
         <div className="space-y-4">
+          {/* Tab header with context-aware label */}
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-neutral-500">
+              {isAdmin
+                ? `All reports — ${visibleReports.length} total, ${pendingReports} pending review`
+                : `Your reports — ${visibleReports.length} submitted`}
+            </p>
+            {!isAdmin && (
+              <button
+                onClick={() => setShowReportForm(true)}
+                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                New Report
+              </button>
+            )}
+          </div>
+
           {loadingReports ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
             </div>
-          ) : reports.length === 0 ? (
+          ) : visibleReports.length === 0 ? (
             <div className="bg-white rounded-xl border border-neutral-200 p-12 text-center">
               <FileText className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
               <h3 className="font-medium text-neutral-900 mb-1">No reports yet</h3>
-              <p className="text-sm text-neutral-500 mb-4">Weekly reports submitted by staff will appear here.</p>
+              <p className="text-sm text-neutral-500 mb-4">
+                {isAdmin ? 'Weekly reports submitted by staff will appear here.' : 'Submit your first weekly report to get started.'}
+              </p>
               <button
                 onClick={() => setShowReportForm(true)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
@@ -430,7 +465,7 @@ export function WorkforceKPI() {
               </button>
             </div>
           ) : (
-            reports.map(report => {
+            visibleReports.map(report => {
               const items = report.items ?? [];
               const doneItems = items.filter(i => i.done);
               return (
@@ -491,6 +526,14 @@ export function WorkforceKPI() {
                     </div>
                   )}
 
+                  {/* Admin: show worker's response if any */}
+                  {isAdmin && report.worker_response && (
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-xs font-medium text-blue-700 mb-1">Worker's Response</p>
+                      <p className="text-sm text-blue-800">{report.worker_response}</p>
+                    </div>
+                  )}
+
                   {/* Review actions — admin/manager only */}
                   {isAdmin && report.status === 'pending-review' && (
                     <div className="flex gap-2 pt-4 border-t border-neutral-100">
@@ -509,6 +552,39 @@ export function WorkforceKPI() {
                       >
                         Request Changes
                       </button>
+                    </div>
+                  )}
+
+                  {/* Worker: respond to rejected report */}
+                  {!isAdmin && report.status === 'rejected' && (
+                    <div className="pt-4 border-t border-neutral-100">
+                      {report.worker_response ? (
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-xs font-medium text-blue-700 mb-1">Your Response (submitted)</p>
+                          <p className="text-sm text-blue-800">{report.worker_response}</p>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-xs font-medium text-neutral-500 mb-2">Respond to Changes Request</p>
+                          <textarea
+                            rows={3}
+                            placeholder="Explain your position, add context, or clarify any points for the reviewer..."
+                            value={workerResponses[report.id] ?? ''}
+                            onChange={e => setWorkerResponses(prev => ({ ...prev, [report.id]: e.target.value }))}
+                            className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                          />
+                          <div className="flex justify-end mt-2">
+                            <button
+                              onClick={() => submitWorkerResponse(report.id)}
+                              disabled={!workerResponses[report.id]?.trim() || submittingResponse === report.id}
+                              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                            >
+                              {submittingResponse === report.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                              Submit Response
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -776,6 +852,226 @@ export function WorkforceKPI() {
           )}
         </div>
       )}
+
+      {/* ── Employee Detail Modal ── */}
+      {selectedEmployee && (() => {
+        const emp = selectedEmployee;
+        const stats = getWorkerStats(emp.id);
+        const empReports = reports.filter(r => r.worker_id === emp.id);
+        const initials = emp.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+
+              {/* Header */}
+              <div className="p-6 border-b border-neutral-200 flex items-start justify-between flex-shrink-0">
+                <div className="flex items-center gap-4">
+                  <div className={`w-14 h-14 rounded-full text-white flex items-center justify-center text-lg font-semibold flex-shrink-0 ${emp.status === 'suspended' ? 'bg-neutral-400' : 'bg-blue-600'}`}>
+                    {initials}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-xl font-semibold text-neutral-900">{emp.full_name}</h2>
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${ROLE_COLORS[emp.role]}`}>
+                        {ROLE_LABELS[emp.role]}
+                      </span>
+                      {emp.status === 'pending' && (
+                        <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-medium">Pending</span>
+                      )}
+                      {emp.status === 'suspended' && (
+                        <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium">Suspended</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-neutral-400 mt-0.5">{emp.email}</p>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedEmployee(null)} className="p-2 hover:bg-neutral-100 rounded-lg transition-colors flex-shrink-0 ml-2">
+                  <X className="w-5 h-5 text-neutral-500" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 space-y-6 overflow-y-auto flex-1">
+
+                {/* Contact */}
+                <div>
+                  <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-3">Contact</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm text-neutral-700">
+                      <Mail className="w-4 h-4 text-neutral-400" />
+                      {emp.email}
+                    </div>
+                    {emp.phone && (
+                      <div className="flex items-center gap-2 text-sm text-neutral-700">
+                        <Phone className="w-4 h-4 text-neutral-400" />
+                        {emp.phone}
+                      </div>
+                    )}
+                    {emp.phone && (
+                      <a
+                        href={`https://wa.me/${emp.phone.replace(/\D/g, '')}?text=Hi ${encodeURIComponent(emp.full_name)}, this is the 765 Realty management team.`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 transition-colors w-fit"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        Message on WhatsApp
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {/* Performance */}
+                <div>
+                  <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-3">Performance</p>
+                  {stats.performance !== null && (
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-sm text-neutral-600">Task Completion Rate</span>
+                        <span className="text-sm font-semibold text-neutral-900">{stats.performance}%</span>
+                      </div>
+                      <div className="w-full bg-neutral-100 rounded-full h-2.5">
+                        <div
+                          className={`h-2.5 rounded-full transition-all ${
+                            stats.performance >= 75 ? 'bg-green-500' :
+                            stats.performance >= 40 ? 'bg-blue-500' : 'bg-orange-400'
+                          }`}
+                          style={{ width: `${stats.performance}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { label: 'Done', value: stats.done, color: 'text-green-600' },
+                      { label: 'Active', value: stats.inProgress, color: 'text-blue-600' },
+                      { label: 'Blocked', value: stats.blocked, color: 'text-red-500' },
+                      { label: 'Total', value: stats.total, color: 'text-neutral-900' },
+                    ].map(s => (
+                      <div key={s.label} className="bg-neutral-50 rounded-lg p-3 text-center border border-neutral-200">
+                        <p className={`text-xl font-semibold ${s.color}`}>{s.value}</p>
+                        <p className="text-xs text-neutral-500 mt-0.5">{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {stats.performance === null && (
+                    <p className="text-sm text-neutral-400">No tasks assigned yet.</p>
+                  )}
+                </div>
+
+                {/* Assigned Tasks */}
+                {stats.tasks.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-3">Assigned Tasks ({stats.tasks.length})</p>
+                    <div className="space-y-1.5 max-h-44 overflow-y-auto">
+                      {stats.tasks.map(task => (
+                        <div key={task.id} className="flex items-center gap-2 bg-neutral-50 rounded-lg px-3 py-2 border border-neutral-200">
+                          {task.status === 'done' && <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />}
+                          {task.status === 'in-progress' && <Clock className="w-4 h-4 text-blue-600 flex-shrink-0" />}
+                          {task.status === 'blocked' && <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />}
+                          {task.status === 'pending' && <Clock className="w-4 h-4 text-neutral-300 flex-shrink-0" />}
+                          <span className={`flex-1 text-sm ${task.status === 'done' ? 'text-neutral-400 line-through' : 'text-neutral-800'}`}>{task.name}</span>
+                          <span className="text-xs text-neutral-400 capitalize flex-shrink-0">{task.status.replace('-', ' ')}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Recent Reports */}
+                {empReports.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-3">Recent Reports</p>
+                    <div className="space-y-2">
+                      {empReports.slice(0, 3).map(r => (
+                        <div key={r.id} className="flex items-center justify-between bg-neutral-50 rounded-lg px-3 py-2 border border-neutral-200 text-sm">
+                          <span className="text-neutral-700">
+                            Week of {new Date(r.week_start).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${REPORT_STATUS_COLORS[r.status]}`}>
+                            {r.status.replace('-', ' ')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Management Actions — admin only, not own profile */}
+                {isAdmin && emp.id !== profile?.id && (
+                  <div>
+                    <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-3">Management Actions</p>
+                    <div className="flex flex-wrap gap-3 items-center">
+                      <div className="relative">
+                        <select
+                          value={emp.role}
+                          onChange={e => {
+                            updateRole(emp.id, e.target.value);
+                            setSelectedEmployee(prev => prev ? { ...prev, role: e.target.value as Profile['role'] } : prev);
+                          }}
+                          disabled={updatingRole === emp.id || emp.status === 'pending'}
+                          className={`pl-3 pr-7 py-2 text-sm rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer appearance-none ${ROLE_COLORS[emp.role]}`}
+                        >
+                          <option value="admin">Admin</option>
+                          <option value="manager">Manager</option>
+                          <option value="office_staff">Office Staff</option>
+                          <option value="field_worker">Field Worker</option>
+                          <option value="client">Client</option>
+                        </select>
+                        {updatingRole === emp.id ? (
+                          <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-current pointer-events-none" />
+                        ) : (
+                          <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-current pointer-events-none opacity-60" />
+                        )}
+                      </div>
+                      {emp.status === 'pending' && (
+                        <button
+                          onClick={() => { updateStatus(emp.id, 'active'); setSelectedEmployee(prev => prev ? { ...prev, status: 'active' } : prev); }}
+                          disabled={updatingStatus === emp.id}
+                          className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          {updatingStatus === emp.id ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                          Approve Account
+                        </button>
+                      )}
+                      {emp.status === 'active' && (
+                        <button
+                          onClick={() => { updateStatus(emp.id, 'suspended'); setSelectedEmployee(prev => prev ? { ...prev, status: 'suspended' } : prev); }}
+                          disabled={updatingStatus === emp.id}
+                          className="px-4 py-2 border border-red-200 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          {updatingStatus === emp.id ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                          Suspend
+                        </button>
+                      )}
+                      {emp.status === 'suspended' && (
+                        <button
+                          onClick={() => { updateStatus(emp.id, 'active'); setSelectedEmployee(prev => prev ? { ...prev, status: 'active' } : prev); }}
+                          disabled={updatingStatus === emp.id}
+                          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          {updatingStatus === emp.id ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                          Reactivate
+                        </button>
+                      )}
+                      {emp.role === 'field_worker' && (
+                        <button
+                          onClick={() => { setSelectedEmployee(null); navigate('/app/field'); }}
+                          className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                        >
+                          <Smartphone className="w-4 h-4" />
+                          Field Operations
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Submit Weekly Report Modal ── */}
       {showReportForm && (
