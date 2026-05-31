@@ -20,6 +20,7 @@ import {
   Music2,
   Mic,
   MicOff,
+  LogOut,
 } from 'lucide-react';
 
 // Replace with your WhatsApp Business number (digits only, include country code, no +)
@@ -60,7 +61,7 @@ function getWeekInfo() {
 }
 
 export function FieldOperations() {
-  const { user, profile } = useAuth();
+  const { user, profile, signOut } = useAuth();
 
   const [activeTasks, setActiveTasks] = useState<TaskWithRelations[]>([]);
   const [completedTasks, setCompletedTasks] = useState<TaskWithRelations[]>([]);
@@ -363,6 +364,13 @@ export function FieldOperations() {
             <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium text-sm">
               {initials}
             </div>
+            <button
+              onClick={signOut}
+              className="w-9 h-9 rounded-full bg-neutral-100 text-neutral-500 flex items-center justify-center hover:bg-neutral-200 transition-colors"
+              title="Sign out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
