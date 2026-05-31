@@ -493,7 +493,7 @@ export function BrokerageOperations() {
     <div className="p-4 md:p-6 space-y-4 md:space-y-6">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-neutral-900">Brokerage Operations</h1>
           <p className="text-sm text-neutral-500 mt-1">Manage deals from enquiry to closing</p>

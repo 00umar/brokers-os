@@ -608,7 +608,7 @@ export function SalesMarketing() {
           </div>
           {PARTNERSHIPS.map(partner => (
             <div key={partner.id} className="bg-white rounded-xl border border-neutral-200 p-5">
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0">
                     <Handshake className="w-6 h-6 text-purple-600" />
@@ -632,7 +632,7 @@ export function SalesMarketing() {
                     <p className="text-sm text-neutral-700 mt-2">{partner.notes}</p>
                   </div>
                 </div>
-                <div className="text-right flex-shrink-0">
+                <div className="sm:text-right flex-shrink-0">
                   <p className="text-xs text-neutral-500">Partnership Value</p>
                   <p className="text-sm font-medium text-neutral-900 mt-1">{partner.value}</p>
                 </div>

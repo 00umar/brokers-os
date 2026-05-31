@@ -158,7 +158,8 @@ export function TeamManagement() {
             <p className="text-sm text-neutral-400 mt-1">Invite your first team member above.</p>
           </div>
         ) : (
-          <table className="w-full">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[620px]">
             <thead className="bg-neutral-50 border-b border-neutral-200">
               <tr>
                 <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Staff Member</th>
@@ -230,6 +231,7 @@ export function TeamManagement() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
