@@ -42,6 +42,20 @@ const CLIENT_TYPE_COLOR: Record<string, string> = {
   investor: 'bg-purple-100 text-purple-700',
 };
 
+const SOCIAL_LEADS = [
+  { id: 'SL-001', platform: 'instagram', name: 'Chukwuemeka Obi',   property: 'Duplex — Lekki Phase 1',       interaction: 'DM inquiry via story ad',                  timestamp: '2 hours ago', status: 'new' },
+  { id: 'SL-002', platform: 'tiktok',    name: 'Fatima Abubakar',   property: 'Studio Apartment — Abuja',     interaction: 'Clicked link in bio + filled form',        timestamp: '5 hours ago', status: 'new' },
+  { id: 'SL-003', platform: 'instagram', name: 'Adewale Fashola',   property: '3-Bed Terrace — VGC',          interaction: 'Liked ad + sent DM',                       timestamp: '1 day ago',   status: 'contacted' },
+  { id: 'SL-004', platform: 'tiktok',    name: 'Ngozi Eze',         property: 'Investment Land — Epe',        interaction: 'Completed lead gen form on TikTok',        timestamp: '2 days ago',  status: 'qualified' },
+  { id: 'SL-005', platform: 'instagram', name: 'Bashir Mohammed',   property: 'Penthouse — Eko Atlantic',     interaction: 'Saved post + profile visit',               timestamp: '3 days ago',  status: 'new' },
+];
+
+const SOCIAL_STATUS_COLORS: Record<string, string> = {
+  new: 'bg-gray-100 text-gray-700',
+  contacted: 'bg-blue-100 text-blue-700',
+  qualified: 'bg-green-100 text-green-700',
+};
+
 function initials(name: string) {
   return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 }
@@ -65,7 +79,7 @@ const emptyIntakeForm = {
 
 export function BrokerageOperations() {
   const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'intake' | 'clients' | 'listings' | 'analytics'>('pipeline');
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'intake' | 'clients' | 'listings' | 'social' | 'analytics'>('pipeline');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Data
@@ -127,6 +141,10 @@ export function BrokerageOperations() {
   const [intakeFilter, setIntakeFilter] = useState<'all' | 'new' | 'in-progress' | 'completed'>('all');
   const [convertingId, setConvertingId] = useState<string | null>(null);
 
+  // Social leads
+  const [addedSocialLeadIds, setAddedSocialLeadIds] = useState<Set<string>>(new Set());
+  const [addingSocialLeadId, setAddingSocialLeadId] = useState<string | null>(null);
+
   useEffect(() => {
     fetchDeals();
     fetchClients();
@@ -167,6 +185,28 @@ export function BrokerageOperations() {
     const { data } = await supabase.from('listings').select('*').order('created_at', { ascending: false });
     setListings((data as Listing[]) ?? []);
     setLoadingListings(false);
+  }
+
+  // ── Social leads ──────────────────────────────────────────────────────────
+
+  async function addSocialToPipeline(lead: typeof SOCIAL_LEADS[0]) {
+    setAddingSocialLeadId(lead.id);
+    const { data: client } = await supabase.from('clients').insert({
+      name: lead.name,
+      type: 'buyer' as const,
+    }).select().single();
+    if (client) {
+      await supabase.from('deals').insert({
+        client_id: client.id,
+        title: `${lead.name} — ${lead.platform === 'instagram' ? 'Instagram' : 'TikTok'} Lead`,
+        stage: 'new' as const,
+        payment_status: 'pending' as const,
+      });
+      fetchClients();
+      fetchDeals();
+    }
+    setAddedSocialLeadIds(prev => new Set([...prev, lead.id]));
+    setAddingSocialLeadId(null);
   }
 
   // ── Deal handlers ─────────────────────────────────────────────────────────
@@ -522,6 +562,7 @@ export function BrokerageOperations() {
             { id: 'intake', label: 'Intake Queue', badge: newIntakeCount > 0 ? newIntakeCount : null },
             { id: 'clients', label: 'Client Accounts' },
             { id: 'listings', label: 'Listings' },
+            { id: 'social', label: 'Social Leads' },
             { id: 'analytics', label: 'Analytics' },
           ] as const).map(tab => (
             <button
@@ -545,7 +586,7 @@ export function BrokerageOperations() {
       </div>
 
       {/* Search bar */}
-      {activeTab !== 'analytics' && (
+      {activeTab !== 'analytics' && activeTab !== 'social' && (
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
           <input
@@ -996,6 +1037,94 @@ export function BrokerageOperations() {
                 <p className="text-xs font-medium text-neutral-500">Total Enquiries</p>
                 <p className="text-2xl font-semibold text-neutral-900 mt-1">{intakes.length}</p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Social Leads ──────────────────────────────────────────────────── */}
+      {activeTab === 'social' && (
+        <div className="space-y-4">
+          <div className="bg-pink-50 border border-pink-200 rounded-xl px-4 py-3 flex items-start gap-3">
+            <div className="w-5 h-5 rounded-full bg-pink-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span className="text-white text-xs font-bold">i</span>
+            </div>
+            <p className="text-sm text-pink-800">
+              <span className="font-medium">Simulation mode.</span> These are mock leads from Instagram and TikTok campaigns. Click <span className="font-medium">Add to Pipeline</span> to create a client record and open a deal at stage <em>New</em>.
+            </p>
+          </div>
+
+          <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[620px]">
+                <thead className="bg-neutral-50 border-b border-neutral-200">
+                  <tr>
+                    <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Platform</th>
+                    <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Name</th>
+                    <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Property Interest</th>
+                    <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Interaction</th>
+                    <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Status</th>
+                    <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {SOCIAL_LEADS.map(lead => {
+                    const isAdded = addedSocialLeadIds.has(lead.id);
+                    const isAdding = addingSocialLeadId === lead.id;
+                    return (
+                      <tr key={lead.id} className={`transition-colors ${isAdded ? 'bg-green-50/40' : 'hover:bg-neutral-50'}`}>
+                        <td className="px-5 py-4">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            lead.platform === 'instagram' ? 'bg-pink-100 text-pink-700' : 'bg-neutral-900 text-white'
+                          }`}>
+                            {lead.platform === 'instagram' ? 'Instagram' : 'TikTok'}
+                          </span>
+                          <p className="text-xs text-neutral-400 mt-1">{lead.timestamp}</p>
+                        </td>
+                        <td className="px-5 py-4">
+                          <p className="text-sm font-medium text-neutral-900">{lead.name}</p>
+                        </td>
+                        <td className="px-5 py-4">
+                          <p className="text-sm text-neutral-700">{lead.property}</p>
+                        </td>
+                        <td className="px-5 py-4">
+                          <p className="text-xs text-neutral-500">{lead.interaction}</p>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium capitalize ${SOCIAL_STATUS_COLORS[lead.status] ?? 'bg-gray-100 text-gray-700'}`}>
+                            {lead.status}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4">
+                          {isAdded ? (
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2.5 py-1 rounded-lg font-medium">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Added
+                              </span>
+                              <button
+                                onClick={() => setActiveTab('pipeline')}
+                                className="text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                              >
+                                View pipeline ↗
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => addSocialToPipeline(lead)}
+                              disabled={isAdding}
+                              className="text-xs px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-medium flex items-center gap-1.5 disabled:opacity-60"
+                            >
+                              {isAdding && <Loader2 className="w-3 h-3 animate-spin" />}
+                              Add to Pipeline
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

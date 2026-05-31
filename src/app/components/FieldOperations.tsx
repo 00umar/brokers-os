@@ -15,7 +15,11 @@ import {
   FolderKanban,
   Loader2,
   Paperclip,
+  MessageCircle,
 } from 'lucide-react';
+
+// Replace with your WhatsApp Business number (digits only, include country code, no +)
+const MANAGER_WHATSAPP = '2348000000000';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Task } from '../../lib/database.types';
@@ -245,8 +249,19 @@ export function FieldOperations() {
               {profile?.full_name ?? '...'} · Field Operations
             </p>
           </div>
-          <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium text-sm">
-            {initials}
+          <div className="flex items-center gap-2">
+            <a
+              href={`https://wa.me/${MANAGER_WHATSAPP}?text=${encodeURIComponent(`Hi, this is ${profile?.full_name ?? 'a field worker'} from site. I need to speak with the manager.`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-9 h-9 rounded-full bg-green-600 text-white flex items-center justify-center"
+              title="Contact Manager via WhatsApp"
+            >
+              <MessageCircle className="w-4 h-4" />
+            </a>
+            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium text-sm">
+              {initials}
+            </div>
           </div>
         </div>
 
@@ -690,6 +705,21 @@ export function FieldOperations() {
                     </div>
                   </button>
                 </div>
+              </div>
+            )}
+
+            {selectedTask.status === 'blocked' && (
+              <div>
+                <h3 className="font-medium text-neutral-900 mb-3">Task is Blocked</h3>
+                <a
+                  href={`https://wa.me/${MANAGER_WHATSAPP}?text=${encodeURIComponent(`Task BLOCKED: "${selectedTask.name}"${selectedTask.project?.name ? ` (${selectedTask.project.name})` : ''}. Please advise.`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full p-4 bg-green-50 border-2 border-green-200 rounded-xl flex items-center gap-3 active:scale-[0.98] transition-transform"
+                >
+                  <MessageCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  <span className="font-medium text-green-900">Report Blocked via WhatsApp</span>
+                </a>
               </div>
             )}
 

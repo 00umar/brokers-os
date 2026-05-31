@@ -38,18 +38,10 @@ const ACTIVITY_CONFIG: Record<string, { icon: any; color: string }> = {
 const TABS = [
   { id: 'leads', label: 'Business Leads' },
   { id: 'followups', label: 'Follow-ups' },
-  { id: 'social', label: 'Social Leads' },
   { id: 'partnerships', label: 'Partnerships' },
   { id: 'activity', label: 'Activity Log' },
 ];
 
-const SOCIAL_LEADS = [
-  { id: 'SL-001', platform: 'instagram', name: 'Chukwuemeka Obi', property: 'Duplex — Lekki Phase 1', interaction: 'DM inquiry via story ad', timestamp: '2 hours ago', status: 'new' },
-  { id: 'SL-002', platform: 'tiktok', name: 'Fatima Abubakar', property: 'Studio Apartment — Abuja', interaction: 'Clicked link in bio + filled form', timestamp: '5 hours ago', status: 'new' },
-  { id: 'SL-003', platform: 'instagram', name: 'Adewale Fashola', property: '3-Bed Terrace — VGC', interaction: 'Liked ad + sent DM', timestamp: '1 day ago', status: 'contacted' },
-  { id: 'SL-004', platform: 'tiktok', name: 'Ngozi Eze', property: 'Investment Land — Epe', interaction: 'Completed lead gen form on TikTok', timestamp: '2 days ago', status: 'qualified' },
-  { id: 'SL-005', platform: 'instagram', name: 'Bashir Mohammed', property: 'Penthouse — Eko Atlantic', interaction: 'Saved post + profile visit', timestamp: '3 days ago', status: 'new' },
-];
 
 // Static until DB tables are added
 const PARTNERSHIPS = [
@@ -99,10 +91,6 @@ export function SalesMarketing() {
   const [convertDealTitle, setConvertDealTitle] = useState('');
   const [converting, setConverting] = useState(false);
   const [convertSuccess, setConvertSuccess] = useState(false);
-
-  // Social leads simulation
-  const [addedSocialLeadIds, setAddedSocialLeadIds] = useState<Set<string>>(new Set());
-  const [addingSocialLeadId, setAddingSocialLeadId] = useState<string | null>(null);
 
   // Follow-ups
   const [followUpFilter, setFollowUpFilter] = useState<'all' | 'pending' | 'completed'>('all');
@@ -193,23 +181,6 @@ export function SalesMarketing() {
     setLeads(p => p.map(l => l.id === convertingLead!.id ? { ...l, status: 'converted' as const } : l));
     setConverting(false);
     setConvertSuccess(true);
-  }
-
-  // ── Social lead simulation ────────────────────────────────────────────────
-
-  async function addSocialLead(socialLead: typeof SOCIAL_LEADS[0]) {
-    setAddingSocialLeadId(socialLead.id);
-    const { data } = await supabase.from('leads').insert({
-      name: socialLead.name,
-      source: socialLead.platform === 'instagram' ? 'Instagram' : 'TikTok',
-      notes: `${socialLead.interaction} — interested in: ${socialLead.property}`,
-      status: socialLead.status as Lead['status'],
-    }).select().single();
-    if (data) {
-      setLeads(prev => [data as Lead, ...prev]);
-      setAddedSocialLeadIds(prev => new Set([...prev, socialLead.id]));
-    }
-    setAddingSocialLeadId(null);
   }
 
   // ── Task handlers ─────────────────────────────────────────────────────────
@@ -506,94 +477,6 @@ export function SalesMarketing() {
               );
             })
           )}
-        </div>
-      )}
-
-      {/* ── SOCIAL LEADS ── */}
-      {activeTab === 'social' && (
-        <div className="space-y-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-3">
-            <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-white text-xs font-bold">i</span>
-            </div>
-            <p className="text-sm text-blue-800">
-              <span className="font-medium">Simulation mode.</span> These are mock leads previewing what Instagram and TikTok integration will look like. Click <span className="font-medium">Add as Lead</span> on any row — it will create a real lead in Business Leads. Once API credentials are connected, leads will appear here automatically.
-            </p>
-          </div>
-
-          <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden overflow-x-auto">
-            <table className="w-full min-w-[600px]">
-              <thead className="bg-neutral-50 border-b border-neutral-200">
-                <tr>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Platform</th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Lead</th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Property Interest</th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Interaction</th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Status</th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {SOCIAL_LEADS.map(lead => {
-                  const isAdded = addedSocialLeadIds.has(lead.id);
-                  const isAdding = addingSocialLeadId === lead.id;
-                  return (
-                  <tr key={lead.id} className={`transition-colors ${isAdded ? 'bg-green-50/40' : 'hover:bg-neutral-50'}`}>
-                    <td className="px-5 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                        lead.platform === 'instagram'
-                          ? 'bg-pink-100 text-pink-700'
-                          : 'bg-neutral-900 text-white'
-                      }`}>
-                        {lead.platform === 'instagram' ? 'Instagram' : 'TikTok'}
-                      </span>
-                      <p className="text-xs text-neutral-400 mt-1">{lead.timestamp}</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="text-sm font-medium text-neutral-900">{lead.name}</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="text-sm text-neutral-700">{lead.property}</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="text-xs text-neutral-500">{lead.interaction}</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium capitalize ${LEAD_STATUS_COLORS[lead.status] ?? 'bg-gray-100 text-gray-700'}`}>
-                        {lead.status}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">
-                      {isAdded ? (
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2.5 py-1 rounded-lg font-medium">
-                            <CheckCircle2 className="w-3 h-3" />
-                            Added
-                          </span>
-                          <button
-                            onClick={() => setActiveTab('leads')}
-                            className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors"
-                          >
-                            View <ArrowUpRight className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => addSocialLead(lead)}
-                          disabled={isAdding}
-                          className="text-xs px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium flex items-center gap-1.5 disabled:opacity-60"
-                        >
-                          {isAdding && <Loader2 className="w-3 h-3 animate-spin" />}
-                          Add as Lead
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
         </div>
       )}
 

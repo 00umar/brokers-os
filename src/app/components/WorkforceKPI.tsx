@@ -17,6 +17,7 @@ import {
   AlertCircle,
   Mail,
   Phone,
+  MessageCircle,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -676,6 +677,17 @@ export function WorkforceKPI() {
                                   <Phone className="w-4 h-4 text-neutral-400" />
                                   {p.phone}
                                 </div>
+                              )}
+                              {p.phone && (
+                                <a
+                                  href={`https://wa.me/${p.phone.replace(/\D/g, '')}?text=Hi ${encodeURIComponent(p.full_name)}, this is the 765 Realty management team.`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 transition-colors w-fit"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                  Message on WhatsApp
+                                </a>
                               )}
                             </div>
                           </div>
