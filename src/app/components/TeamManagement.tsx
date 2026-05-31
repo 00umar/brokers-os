@@ -132,7 +132,7 @@ export function TeamManagement() {
         ].map(m => {
           const Icon = m.icon;
           return (
-            <div key={m.label} className="bg-white rounded-xl border border-neutral-200 p-3 sm:p-5 flex items-center justify-between">
+            <div key={m.label} className="bg-white rounded-xl border border-neutral-200 p-3 sm:p-5 flex items-start justify-between">
               <div>
                 <p className="text-xs sm:text-sm text-neutral-500">{m.label}</p>
                 <p className="text-xl sm:text-2xl font-semibold text-neutral-900 mt-1">{m.value}</p>

@@ -239,33 +239,33 @@ export function WorkforceKPI() {
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-neutral-900">Workforce KPI & Performance</h1>
           <p className="text-sm text-neutral-500 mt-1">Track team performance and weekly accountability</p>
         </div>
         <button
           onClick={() => setShowReportForm(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
-          Submit Weekly Report
+          Submit Report
         </button>
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {metrics.map(metric => {
           const Icon = metric.icon;
           return (
-            <div key={metric.label} className="bg-white rounded-xl border border-neutral-200 p-5">
+            <div key={metric.label} className="bg-white rounded-xl border border-neutral-200 p-3 sm:p-5">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <p className="text-sm text-neutral-500">{metric.label}</p>
-                  <p className="text-2xl font-semibold text-neutral-900 mt-2">{metric.value}</p>
+                  <p className="text-xs sm:text-sm text-neutral-500">{metric.label}</p>
+                  <p className="text-xl sm:text-2xl font-semibold text-neutral-900 mt-1">{metric.value}</p>
                 </div>
-                <div className={`p-2.5 rounded-lg ${colorClasses[metric.color]}`}>
-                  <Icon className="w-5 h-5" />
+                <div className={`p-2 sm:p-2.5 rounded-lg ${colorClasses[metric.color]}`}>
+                  <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
               </div>
             </div>
