@@ -27,17 +27,25 @@ export function RootLayout() {
     : '?';
 
   const allNavItems = [
-    { name: 'Dashboard', to: '/app', icon: LayoutDashboard },
-    { name: 'Brokerage Operations', to: '/app/brokerage', icon: Building2 },
-    { name: 'Sales & Marketing', to: '/app/sales', icon: TrendingUp },
-    { name: 'Project Management', to: '/app/projects', icon: FolderKanban },
-    { name: 'Workforce KPI', to: '/app/workforce', icon: Users },
-    { name: 'Field Operations', to: '/app/field', icon: Smartphone },
+    { key: 'dashboard', name: 'Dashboard', to: '/app', icon: LayoutDashboard },
+    { key: 'brokerage', name: 'Brokerage Operations', to: '/app/brokerage', icon: Building2 },
+    { key: 'sales', name: 'Sales & Marketing', to: '/app/sales', icon: TrendingUp },
+    { key: 'projects', name: 'Project Management', to: '/app/projects', icon: FolderKanban },
+    { key: 'workforce', name: 'Workforce KPI', to: '/app/workforce', icon: Users },
+    { key: 'field', name: 'Field Operations', to: '/app/field', icon: Smartphone },
   ];
 
-  const navigation = profile?.role === 'field_worker'
-    ? allNavItems.filter(item => item.to === '/app/field')
-    : allNavItems;
+  const navigation = (() => {
+    const role = profile?.role;
+    if (role === 'field_worker') return allNavItems.filter(i => i.key === 'field');
+    if (role === 'office_staff') return allNavItems.filter(i => ['sales', 'brokerage', 'workforce'].includes(i.key));
+    if (role === 'manager') {
+      const allowed = profile?.allowed_modules;
+      if (allowed && allowed.length > 0) return allNavItems.filter(i => allowed.includes(i.key));
+      return allNavItems;
+    }
+    return allNavItems; // admin sees everything
+  })();
 
   const closeMobile = () => setMobileOpen(false);
 

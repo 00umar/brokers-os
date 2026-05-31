@@ -4,8 +4,18 @@ import { useAuth } from '../../contexts/AuthContext';
 import type { Profile, UserRole } from '../../lib/database.types';
 import {
   Plus, Mail, Shield, User, Clock, CheckCircle2,
-  Ban, Loader2, X, Send, Users,
+  Ban, Loader2, X, Send, Users, LayoutDashboard,
+  Building2, TrendingUp, FolderKanban, Smartphone, Save,
 } from 'lucide-react';
+
+const MODULE_OPTIONS = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'brokerage', label: 'Brokerage Operations', icon: Building2 },
+  { id: 'sales', label: 'Sales & Marketing', icon: TrendingUp },
+  { id: 'projects', label: 'Project Management', icon: FolderKanban },
+  { id: 'workforce', label: 'Workforce KPI', icon: Users },
+  { id: 'field', label: 'Field Operations', icon: Smartphone },
+];
 
 const ROLE_OPTIONS: { value: UserRole; label: string; desc: string }[] = [
   { value: 'admin', label: 'Admin', desc: 'Full access — can manage team and all modules' },
@@ -45,6 +55,11 @@ export function TeamManagement() {
 
   // Status change
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // Module access modal (managers only)
+  const [accessModal, setAccessModal] = useState<Profile | null>(null);
+  const [accessModules, setAccessModules] = useState<string[]>([]);
+  const [savingAccess, setSavingAccess] = useState(false);
 
   useEffect(() => { fetchStaff(); }, []);
 
@@ -102,6 +117,28 @@ export function TeamManagement() {
     setStaff(prev => prev.map(s => s.id === id ? { ...s, status } : s));
     setUpdatingId(null);
   }
+
+  const openAccessModal = (member: Profile) => {
+    setAccessModal(member);
+    setAccessModules(member.allowed_modules && member.allowed_modules.length > 0
+      ? member.allowed_modules
+      : MODULE_OPTIONS.map(m => m.id));
+  };
+
+  const toggleModule = (id: string) => {
+    setAccessModules(prev =>
+      prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
+    );
+  };
+
+  const saveAccess = async () => {
+    if (!accessModal) return;
+    setSavingAccess(true);
+    await supabase.from('profiles').update({ allowed_modules: accessModules }).eq('id', accessModal.id);
+    setStaff(prev => prev.map(s => s.id === accessModal.id ? { ...s, allowed_modules: accessModules } : s));
+    setSavingAccess(false);
+    setAccessModal(null);
+  };
 
   const activeCount = staff.filter(s => s.status === 'active').length;
   const pendingCount = staff.filter(s => s.status === 'pending').length;
@@ -203,7 +240,16 @@ export function TeamManagement() {
                   </td>
                   <td className="px-5 py-4">
                     {member.id !== currentUser?.id && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {member.role === 'manager' && (
+                          <button
+                            onClick={() => openAccessModal(member)}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium"
+                          >
+                            <Shield className="w-3 h-3" />
+                            Set Access
+                          </button>
+                        )}
                         {member.status !== 'active' && (
                           <button
                             onClick={() => updateStatus(member.id, 'active')}
@@ -234,6 +280,65 @@ export function TeamManagement() {
           </div>
         )}
       </div>
+
+      {/* Module Access Modal (managers only) */}
+      {accessModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md">
+            <div className="p-6 border-b border-neutral-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-neutral-900">Module Access</h2>
+                <p className="text-sm text-neutral-500 mt-0.5">{accessModal.full_name}</p>
+              </div>
+              <button onClick={() => setAccessModal(null)} className="p-2 hover:bg-neutral-100 rounded-lg transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-3">
+              <p className="text-sm text-neutral-500 mb-4">Choose which modules this manager can access.</p>
+              {MODULE_OPTIONS.map(mod => {
+                const Icon = mod.icon;
+                const enabled = accessModules.includes(mod.id);
+                return (
+                  <button
+                    key={mod.id}
+                    onClick={() => toggleModule(mod.id)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${
+                      enabled ? 'border-blue-600 bg-blue-50' : 'border-neutral-200 hover:border-neutral-300'
+                    }`}
+                  >
+                    <div className={`p-1.5 rounded-lg ${enabled ? 'bg-blue-600 text-white' : 'bg-neutral-100 text-neutral-500'}`}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <span className={`text-sm font-medium ${enabled ? 'text-blue-900' : 'text-neutral-700'}`}>{mod.label}</span>
+                    <div className={`ml-auto w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                      enabled ? 'bg-blue-600 border-blue-600' : 'border-neutral-300'
+                    }`}>
+                      {enabled && <CheckCircle2 className="w-3 h-3 text-white" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="px-6 pb-6 flex gap-3">
+              <button
+                onClick={() => setAccessModal(null)}
+                className="flex-1 px-4 py-2.5 border border-neutral-200 rounded-lg text-sm hover:bg-neutral-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveAccess}
+                disabled={savingAccess || accessModules.length === 0}
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {savingAccess ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {savingAccess ? 'Saving…' : 'Save Access'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Invite Modal */}
       {showInvite && (

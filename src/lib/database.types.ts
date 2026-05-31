@@ -14,6 +14,7 @@ export interface Profile {
   phone?: string
   department?: string
   status?: 'pending' | 'active' | 'suspended'
+  allowed_modules?: string[] | null
   created_at: string
 }
 
