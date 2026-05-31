@@ -411,14 +411,14 @@ export function ProjectManagement() {
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-neutral-900">Project Management</h1>
           <p className="text-sm text-neutral-500 mt-1">Track project execution roadmaps and team coordination</p>
         </div>
         <button
           onClick={() => { setShowNewProject(true); setWizardStep(1); setWizardCategory(''); setWizardSubType(''); setNewProjectForm({ name: '', type: '', deadline: '', budget: '', pm_name: '' }); }}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           New Project
@@ -564,9 +564,9 @@ export function ProjectManagement() {
 
       {/* ── Execution Roadmap ── */}
       {activeTab === 'roadmap' && (
-        <div className="bg-white rounded-xl border border-neutral-200 p-6">
+        <div className="bg-white rounded-xl border border-neutral-200 p-4 md:p-6">
           {/* Project selector */}
-          <div className="flex items-start gap-4 mb-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-4 mb-6">
             <div className="flex-1">
               <label className="block text-xs text-neutral-500 mb-1">Project</label>
               <select
@@ -581,7 +581,7 @@ export function ProjectManagement() {
               </select>
             </div>
             {selectedProject && (
-              <div className="text-sm text-neutral-500 pt-5 space-y-0.5">
+              <div className="text-sm text-neutral-500 sm:pt-5 space-y-0.5">
                 {selectedProject.pm_name && <p>PM: <span className="text-neutral-900">{selectedProject.pm_name}</span></p>}
                 {selectedProject.deadline && (
                   <p>Due: <span className="text-neutral-900">{new Date(selectedProject.deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span></p>
@@ -629,7 +629,7 @@ export function ProjectManagement() {
                         </div>
                       </div>
 
-                      <div className="flex-1 bg-neutral-50 rounded-xl p-5">
+                      <div className="flex-1 bg-neutral-50 rounded-xl p-3 md:p-5">
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3 flex-wrap">
@@ -644,7 +644,7 @@ export function ProjectManagement() {
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-4 mt-2">
+                            <div className="flex flex-wrap items-center gap-2 mt-2">
                               <div className="flex items-center gap-1.5">
                                 <span className="text-xs text-neutral-400">Start</span>
                                 <input

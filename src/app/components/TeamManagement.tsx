@@ -109,14 +109,14 @@ export function TeamManagement() {
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-neutral-900">Team Management</h1>
           <p className="text-sm text-neutral-500 mt-1">Invite staff and manage account access</p>
         </div>
         <button
           onClick={() => { setShowInvite(true); setInviteResult(null); }}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           Invite Staff
@@ -128,17 +128,17 @@ export function TeamManagement() {
         {[
           { label: 'Total Staff', value: staff.length, icon: Users, color: 'bg-blue-50 text-blue-600' },
           { label: 'Active', value: activeCount, icon: CheckCircle2, color: 'bg-green-50 text-green-600' },
-          { label: 'Pending Approval', value: pendingCount, icon: Clock, color: 'bg-amber-50 text-amber-600' },
+          { label: 'Pending', value: pendingCount, icon: Clock, color: 'bg-amber-50 text-amber-600' },
         ].map(m => {
           const Icon = m.icon;
           return (
-            <div key={m.label} className="bg-white rounded-xl border border-neutral-200 p-5 flex items-center justify-between">
+            <div key={m.label} className="bg-white rounded-xl border border-neutral-200 p-3 sm:p-5 flex items-center justify-between">
               <div>
-                <p className="text-sm text-neutral-500">{m.label}</p>
-                <p className="text-2xl font-semibold text-neutral-900 mt-1">{m.value}</p>
+                <p className="text-xs sm:text-sm text-neutral-500">{m.label}</p>
+                <p className="text-xl sm:text-2xl font-semibold text-neutral-900 mt-1">{m.value}</p>
               </div>
-              <div className={`p-2.5 rounded-lg ${m.color}`}>
-                <Icon className="w-5 h-5" />
+              <div className={`p-2 sm:p-2.5 rounded-lg ${m.color}`}>
+                <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
             </div>
           );
