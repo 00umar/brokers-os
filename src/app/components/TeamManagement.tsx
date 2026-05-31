@@ -5,7 +5,7 @@ import type { Profile, UserRole } from '../../lib/database.types';
 import {
   Plus, Mail, Shield, User, Clock, CheckCircle2,
   Ban, Loader2, X, Send, Users, LayoutDashboard,
-  Building2, TrendingUp, FolderKanban, Smartphone, Save,
+  Building2, TrendingUp, FolderKanban, Smartphone, Save, ChevronDown,
 } from 'lucide-react';
 
 const MODULE_OPTIONS = [
@@ -61,7 +61,18 @@ export function TeamManagement() {
   const [accessModules, setAccessModules] = useState<string[]>([]);
   const [savingAccess, setSavingAccess] = useState(false);
 
+  // Role change
+  const [roleDropdownId, setRoleDropdownId] = useState<string | null>(null);
+  const [changingRoleId, setChangingRoleId] = useState<string | null>(null);
+
   useEffect(() => { fetchStaff(); }, []);
+
+  useEffect(() => {
+    if (!roleDropdownId) return;
+    const close = () => setRoleDropdownId(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [roleDropdownId]);
 
   async function fetchStaff() {
     setLoading(true);
@@ -138,6 +149,14 @@ export function TeamManagement() {
     setStaff(prev => prev.map(s => s.id === accessModal.id ? { ...s, allowed_modules: accessModules } : s));
     setSavingAccess(false);
     setAccessModal(null);
+  };
+
+  const changeRole = async (id: string, role: UserRole) => {
+    setChangingRoleId(id);
+    setRoleDropdownId(null);
+    await supabase.from('profiles').update({ role }).eq('id', id);
+    setStaff(prev => prev.map(s => s.id === id ? { ...s, role } : s));
+    setChangingRoleId(null);
   };
 
   const activeCount = staff.filter(s => s.status === 'active').length;
@@ -241,6 +260,31 @@ export function TeamManagement() {
                   <td className="px-5 py-4">
                     {member.id !== currentUser?.id && (
                       <div className="flex items-center gap-2 flex-wrap">
+                        {/* Role change dropdown */}
+                        <div className="relative">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setRoleDropdownId(roleDropdownId === member.id ? null : member.id); }}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-colors font-medium"
+                          >
+                            {changingRoleId === member.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <User className="w-3 h-3" />}
+                            Role
+                            <ChevronDown className="w-3 h-3" />
+                          </button>
+                          {roleDropdownId === member.id && (
+                            <div className="absolute left-0 top-full mt-1 w-40 bg-white border border-neutral-200 rounded-lg shadow-lg z-10 overflow-hidden">
+                              {ROLE_OPTIONS.filter(r => r.value !== 'client').map(r => (
+                                <button
+                                  key={r.value}
+                                  onClick={() => changeRole(member.id, r.value)}
+                                  className={`w-full text-left px-3 py-2 text-xs hover:bg-neutral-50 transition-colors ${member.role === r.value ? 'font-semibold text-blue-700 bg-blue-50' : 'text-neutral-700'}`}
+                                >
+                                  {r.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
                         {member.role === 'manager' && (
                           <button
                             onClick={() => openAccessModal(member)}
