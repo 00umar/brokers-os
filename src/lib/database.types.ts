@@ -177,6 +177,18 @@ export interface ReportTaskItem {
   created_at: string
 }
 
+export interface OfferLetter {
+  id: string
+  deal_id: string
+  letter_type: 'commission_agreement' | 'settlement_instruction'
+  party_type: 'buyer' | 'seller'
+  status: 'draft' | 'sent' | 'signed'
+  signed_name?: string
+  sent_at?: string
+  signed_at?: string
+  created_at: string
+}
+
 export interface Lead {
   id: string
   name: string
@@ -221,6 +233,7 @@ export interface Database {
       task_notes: { Row: TaskNote; Insert: Omit<TaskNote, 'id' | 'created_at'>; Update: Partial<TaskNote> }
       weekly_reports: { Row: WeeklyReport; Insert: Omit<WeeklyReport, 'id' | 'created_at'>; Update: Partial<WeeklyReport> }
       report_task_items: { Row: ReportTaskItem; Insert: Omit<ReportTaskItem, 'id' | 'created_at'>; Update: Partial<ReportTaskItem> }
+      offer_letters: { Row: OfferLetter; Insert: Omit<OfferLetter, 'id' | 'created_at'>; Update: Partial<OfferLetter> }
       leads: { Row: Lead; Insert: Omit<Lead, 'id' | 'created_at'>; Update: Partial<Lead> }
       sales_tasks: { Row: SalesTask; Insert: Omit<SalesTask, 'id' | 'created_at'>; Update: Partial<SalesTask> }
     }

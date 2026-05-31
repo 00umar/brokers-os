@@ -3,11 +3,11 @@ import {
   Plus, Search, DollarSign, MapPin, Phone, Mail, Building2, X,
   Send, Home, ShieldCheck, TrendingUp, Banknote, Loader2,
   CheckCircle2, Star, StarOff, Trash2, Edit3, Tag, BedDouble, Bath,
-  ClipboardList, Check, MoreVertical, Upload,
+  ClipboardList, Check, MoreVertical, Upload, FileText, AlertTriangle, Printer,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import type { Client, Deal, BrokerNote, IntakeRequest, Listing, DealStage, SalesTask } from '../../lib/database.types';
+import type { Client, Deal, BrokerNote, IntakeRequest, Listing, DealStage, SalesTask, OfferLetter } from '../../lib/database.types';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -108,6 +108,12 @@ export function BrokerageOperations() {
   const [showSalesRequest, setShowSalesRequest] = useState(false);
   const [salesRequestForm, setSalesRequestForm] = useState({ action: '', assigned_to_name: '', due_date: '' });
   const [savingSalesRequest, setSavingSalesRequest] = useState(false);
+
+  // Offer letters
+  const [dealLetters, setDealLetters] = useState<OfferLetter[]>([]);
+  const [viewingLetter, setViewingLetter] = useState<{ letter: OfferLetter; deal: Deal; clientName: string } | null>(null);
+  const [savingLetterStatus, setSavingLetterStatus] = useState(false);
+  const [generatingLetter, setGeneratingLetter] = useState<string | null>(null);
 
   // Client profile panel
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -229,6 +235,9 @@ export function BrokerageOperations() {
       .from('sales_tasks').select('*').eq('deal_id', deal.id)
       .order('created_at', { ascending: false });
     setDealSalesTasks((tasks as SalesTask[]) ?? []);
+    const { data: letters } = await supabase
+      .from('offer_letters').select('*').eq('deal_id', deal.id);
+    setDealLetters((letters as OfferLetter[]) ?? []);
     setShowSalesRequest(false);
     setSalesRequestForm({ action: '', assigned_to_name: '', due_date: '' });
   }
@@ -297,6 +306,47 @@ export function BrokerageOperations() {
       setShowSalesRequest(false);
     }
     setSavingSalesRequest(false);
+  }
+
+  // ── Offer letter handlers ─────────────────────────────────────────────────
+
+  async function generateLetter(letterType: OfferLetter['letter_type'], partyType: OfferLetter['party_type']) {
+    if (!selectedDeal) return;
+    const existing = dealLetters.find(l => l.letter_type === letterType && l.party_type === partyType);
+    if (existing) {
+      openLetterView(existing, selectedDeal);
+      return;
+    }
+    const key = `${letterType}-${partyType}`;
+    setGeneratingLetter(key);
+    const { data } = await supabase.from('offer_letters').insert({
+      deal_id: selectedDeal.id,
+      letter_type: letterType,
+      party_type: partyType,
+      status: 'draft',
+    }).select().single();
+    if (data) {
+      const letter = data as OfferLetter;
+      setDealLetters(prev => [...prev, letter]);
+      openLetterView(letter, selectedDeal);
+    }
+    setGeneratingLetter(null);
+  }
+
+  function openLetterView(letter: OfferLetter, deal: Deal) {
+    const client = clients.find(c => c.id === deal.client_id);
+    setViewingLetter({ letter, deal, clientName: client?.name ?? 'Client' });
+  }
+
+  async function updateLetterStatus(id: string, status: 'sent' | 'signed') {
+    setSavingLetterStatus(true);
+    const updates: Partial<OfferLetter> = { status };
+    if (status === 'sent') (updates as Record<string, unknown>).sent_at = new Date().toISOString();
+    if (status === 'signed') (updates as Record<string, unknown>).signed_at = new Date().toISOString();
+    await supabase.from('offer_letters').update(updates).eq('id', id);
+    setDealLetters(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
+    setViewingLetter(v => v && v.letter.id === id ? { ...v, letter: { ...v.letter, ...updates } } : v);
+    setSavingLetterStatus(false);
   }
 
   // ── Client handlers ───────────────────────────────────────────────────────
@@ -495,6 +545,154 @@ export function BrokerageOperations() {
       setShowLogInquiry(false);
     }, 2000);
     setSubmittingIntake(false);
+  }
+
+  // ── Letter template ───────────────────────────────────────────────────────
+
+  function renderLetterBody(letter: OfferLetter, deal: Deal, clientName: string) {
+    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const ref = `765-${deal.id.slice(0, 8).toUpperCase()}`;
+    const budgetStr = deal.budget_min || deal.budget_max
+      ? [
+          deal.budget_min ? `₦${(deal.budget_min / 1_000_000).toFixed(1)}M` : '',
+          deal.budget_max ? `₦${(deal.budget_max / 1_000_000).toFixed(1)}M` : '',
+        ].filter(Boolean).join(' – ')
+      : 'To be agreed';
+    const partyLabel = letter.party_type === 'buyer' ? 'Buyer / Purchaser' : 'Seller / Vendor';
+    const actionLabel = letter.party_type === 'buyer' ? 'purchase' : 'sale';
+
+    if (letter.letter_type === 'commission_agreement') {
+      return (
+        <div className="space-y-5 text-sm text-neutral-800 leading-relaxed font-serif">
+          <div className="text-center pb-5 border-b-2 border-neutral-800">
+            <h2 className="text-2xl font-bold uppercase tracking-widest font-sans">765 Realty</h2>
+            <p className="text-xs text-neutral-500 mt-1 font-sans">Professional Real Estate Services</p>
+          </div>
+          <div className="text-center">
+            <h3 className="text-sm font-bold uppercase tracking-wider font-sans">Commission Agreement & Authority to Act</h3>
+          </div>
+          <div className="flex justify-between text-xs text-neutral-500 font-sans">
+            <span>Date: {today}</span>
+            <span>Ref: {ref}</span>
+          </div>
+          <p>To: <strong>{clientName}</strong> ({partyLabel})</p>
+          <p>
+            This Agreement is entered into between <strong>765 Realty</strong> ("the Agent") and{' '}
+            <strong>{clientName}</strong> ("the Principal") in respect of the transaction described below.
+          </p>
+          <div className="bg-neutral-50 rounded-lg p-4 space-y-1.5 text-xs font-sans border border-neutral-200">
+            <p><span className="font-semibold w-32 inline-block">Transaction:</span>{deal.title}</p>
+            {deal.location && <p><span className="font-semibold w-32 inline-block">Location:</span>{deal.location}</p>}
+            {deal.property_type && <p><span className="font-semibold w-32 inline-block">Property Type:</span>{deal.property_type}</p>}
+            <p><span className="font-semibold w-32 inline-block">Agreed Value:</span>{budgetStr}</p>
+            <p><span className="font-semibold w-32 inline-block">Party Type:</span>{partyLabel}</p>
+          </div>
+          <p className="font-bold uppercase text-xs tracking-wide font-sans">Terms and Conditions</p>
+          <ol className="list-decimal pl-5 space-y-2 text-xs font-sans">
+            <li><strong>Mandate:</strong> The Principal hereby grants 765 Realty the exclusive authority to act as Agent in facilitating the {actionLabel} of the above-referenced property.</li>
+            <li><strong>Commission:</strong> The Principal agrees to pay 765 Realty a professional service commission of <strong>5% (five percent)</strong> of the final agreed transaction value upon successful completion of the transaction.</li>
+            <li><strong>Scope of Services:</strong> This commission covers all professional services rendered including property sourcing/marketing, client negotiations, due diligence coordination, and transaction management.</li>
+            <li><strong>Payment Terms:</strong> Commission shall be remitted to 765 Realty on or before the date of signing of the final Agreement of Sale / Deed of Assignment / Transfer of Title.</li>
+            <li><strong>Exclusivity:</strong> The Principal agrees not to engage any other agent for this specific transaction while this agreement remains in effect.</li>
+            <li><strong>Validity:</strong> This agreement remains valid until the transaction is completed or either party provides 30 days' written notice of termination.</li>
+          </ol>
+          <p className="text-xs text-neutral-600 italic font-sans">
+            By signing below, I confirm that I have read, understood, and agree to the terms set out in this Commission Agreement.
+          </p>
+          <div className="grid grid-cols-2 gap-8 pt-4">
+            <div className="space-y-4">
+              <p className="text-xs font-bold uppercase text-neutral-500 font-sans">Principal / Client</p>
+              <div className="space-y-2 text-xs font-sans">
+                <p>Name: __________________________</p>
+                <div className="border-b border-neutral-400 mt-6 mb-1" />
+                <p>Signature</p>
+                <p>Date: ___________________________</p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <p className="text-xs font-bold uppercase text-neutral-500 font-sans">For 765 Realty</p>
+              <div className="space-y-2 text-xs font-sans">
+                <p>Name: __________________________</p>
+                <div className="border-b border-neutral-400 mt-6 mb-1" />
+                <p>Authorised Signature</p>
+                <p>Date: ___________________________</p>
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-center text-neutral-400 pt-4 border-t border-neutral-200 font-sans">
+            765 Realty · Professional Real Estate Services · operations@765realty.com
+          </p>
+        </div>
+      );
+    }
+
+    // Settlement Instruction
+    return (
+      <div className="space-y-5 text-sm text-neutral-800 leading-relaxed font-serif">
+        <div className="text-center pb-5 border-b-2 border-neutral-800">
+          <h2 className="text-2xl font-bold uppercase tracking-widest font-sans">765 Realty</h2>
+          <p className="text-xs text-neutral-500 mt-1 font-sans">Professional Real Estate Services</p>
+        </div>
+        <div className="text-center">
+          <h3 className="text-sm font-bold uppercase tracking-wider font-sans">Settlement & Payment Instruction</h3>
+        </div>
+        <div className="flex justify-between text-xs text-neutral-500 font-sans">
+          <span>Date: {today}</span>
+          <span>Ref: {ref}</span>
+        </div>
+        <p>To: <strong>{clientName}</strong> ({partyLabel})</p>
+        <p>
+          This letter serves as formal settlement instruction in connection with the real estate transaction described below.
+          Please read carefully and acknowledge by signing where indicated.
+        </p>
+        <div className="bg-neutral-50 rounded-lg p-4 space-y-1.5 text-xs font-sans border border-neutral-200">
+          <p><span className="font-semibold w-40 inline-block">Transaction:</span>{deal.title}</p>
+          {deal.location && <p><span className="font-semibold w-40 inline-block">Location:</span>{deal.location}</p>}
+          <p><span className="font-semibold w-40 inline-block">Transaction Value:</span>{budgetStr}</p>
+          <p><span className="font-semibold w-40 inline-block">Professional Fee (5%):</span>To be confirmed in writing</p>
+        </div>
+        <p className="font-bold uppercase text-xs tracking-wide font-sans">Commission Payment Details</p>
+        <div className="bg-blue-50 rounded-lg p-4 space-y-1.5 text-xs border border-blue-200 font-sans">
+          <p className="font-semibold text-blue-900 mb-2">Remit to:</p>
+          <p><span className="font-semibold w-36 inline-block">Account Name:</span>765 Realty Limited</p>
+          <p><span className="font-semibold w-36 inline-block">Bank:</span>[Bank Name — update before sending]</p>
+          <p><span className="font-semibold w-36 inline-block">Account Number:</span>[Account Number]</p>
+          <p><span className="font-semibold w-36 inline-block">Sort Code:</span>[Sort Code]</p>
+        </div>
+        <ol className="list-decimal pl-5 space-y-2 text-xs font-sans">
+          <li>Transfer the commission amount to the account details above.</li>
+          <li>Upon transfer, send proof of payment to: <strong>operations@765realty.com</strong></li>
+          <li>This instruction must be completed within <strong>48 hours</strong> of deal closure confirmation.</li>
+          <li>Title transfer and all further facilitation by 765 Realty will only proceed upon confirmation of cleared funds.</li>
+        </ol>
+        <p className="text-xs text-neutral-600 italic font-sans">
+          By signing below, I acknowledge receipt of this settlement instruction and confirm my commitment to remit the professional fee as outlined above.
+        </p>
+        <div className="grid grid-cols-2 gap-8 pt-4">
+          <div className="space-y-4">
+            <p className="text-xs font-bold uppercase text-neutral-500 font-sans">Client / Principal</p>
+            <div className="space-y-2 text-xs font-sans">
+              <p>Name: __________________________</p>
+              <div className="border-b border-neutral-400 mt-6 mb-1" />
+              <p>Signature</p>
+              <p>Date: ___________________________</p>
+            </div>
+          </div>
+          <div className="space-y-4">
+            <p className="text-xs font-bold uppercase text-neutral-500 font-sans">For 765 Realty</p>
+            <div className="space-y-2 text-xs font-sans">
+              <p>Name: __________________________</p>
+              <div className="border-b border-neutral-400 mt-6 mb-1" />
+              <p>Authorised Signature</p>
+              <p>Date: ___________________________</p>
+            </div>
+          </div>
+        </div>
+        <p className="text-xs text-center text-neutral-400 pt-4 border-t border-neutral-200 font-sans">
+          765 Realty · Professional Real Estate Services · operations@765realty.com
+        </p>
+      </div>
+    );
   }
 
   // ── Derived ───────────────────────────────────────────────────────────────
@@ -1270,6 +1468,78 @@ export function BrokerageOperations() {
                 </div>
               </div>
 
+              {/* Offer Letters */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">Offer Letters</p>
+                  {(selectedDeal.stage === 'negotiation' || selectedDeal.stage === 'closed') && (
+                    <span className="flex items-center gap-1 text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                      <AlertTriangle className="w-3 h-3" />
+                      Action required at this stage
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-3">
+                  {([
+                    { type: 'commission_agreement' as const, label: 'Commission Agreement', hint: 'negotiation' },
+                    { type: 'settlement_instruction' as const, label: 'Settlement Instruction', hint: 'closed' },
+                  ]).map(({ type, label, hint }) => (
+                    <div key={type}>
+                      <p className="text-xs text-neutral-500 mb-2 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5" />
+                        {label}
+                        {selectedDeal.stage === hint && (
+                          <span className="text-amber-600 font-medium ml-1">— recommended now</span>
+                        )}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(['buyer', 'seller'] as const).map(party => {
+                          const letter = dealLetters.find(l => l.letter_type === type && l.party_type === party);
+                          const key = `${type}-${party}`;
+                          const isGen = generatingLetter === key;
+                          return (
+                            <button
+                              key={party}
+                              onClick={() => generateLetter(type, party)}
+                              disabled={isGen}
+                              className={`p-3 rounded-xl border text-left transition-all hover:shadow-sm disabled:opacity-50 ${
+                                !letter
+                                  ? 'border-dashed border-neutral-300 bg-neutral-50 hover:border-blue-400 hover:bg-blue-50/60'
+                                  : letter.status === 'signed'
+                                  ? 'border-emerald-200 bg-emerald-50'
+                                  : letter.status === 'sent'
+                                  ? 'border-blue-200 bg-blue-50'
+                                  : 'border-neutral-200 bg-white hover:border-blue-300'
+                              }`}
+                            >
+                              <p className="text-xs font-semibold text-neutral-700 capitalize">{party} Side</p>
+                              {isGen ? (
+                                <p className="text-xs text-neutral-400 mt-1 flex items-center gap-1">
+                                  <Loader2 className="w-3 h-3 animate-spin" />Generating…
+                                </p>
+                              ) : !letter ? (
+                                <p className="text-xs text-blue-600 mt-1">+ Generate letter</p>
+                              ) : (
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  {letter.status === 'signed' ? (
+                                    <><CheckCircle2 className="w-3 h-3 text-emerald-600" /><span className="text-xs text-emerald-700 font-medium">Signed</span></>
+                                  ) : letter.status === 'sent' ? (
+                                    <><Send className="w-3 h-3 text-blue-600" /><span className="text-xs text-blue-700 font-medium">Sent to client</span></>
+                                  ) : (
+                                    <><FileText className="w-3 h-3 text-neutral-400" /><span className="text-xs text-neutral-600">Draft</span></>
+                                  )}
+                                  <span className="text-xs text-neutral-400 ml-auto">View →</span>
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {/* Payment */}
               <div className="flex items-center justify-between p-4 rounded-xl border border-neutral-200">
                 <div>
@@ -1423,6 +1693,105 @@ export function BrokerageOperations() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Offer Letter View Modal */}
+      {viewingLetter && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 bg-neutral-50 rounded-t-2xl flex-shrink-0">
+              <div>
+                <p className="text-sm font-semibold text-neutral-900">
+                  {viewingLetter.letter.letter_type === 'commission_agreement'
+                    ? 'Commission Agreement'
+                    : 'Settlement Instruction'}{' '}
+                  <span className="capitalize text-neutral-500 font-normal">— {viewingLetter.letter.party_type} side</span>
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  {viewingLetter.letter.status === 'signed' ? (
+                    <span className="flex items-center gap-1 text-xs text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-medium">
+                      <CheckCircle2 className="w-3 h-3" />Signed
+                    </span>
+                  ) : viewingLetter.letter.status === 'sent' ? (
+                    <span className="flex items-center gap-1 text-xs text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full font-medium">
+                      <Send className="w-3 h-3" />Sent to client
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-xs text-neutral-600 bg-neutral-200 px-2 py-0.5 rounded-full font-medium">
+                      <FileText className="w-3 h-3" />Draft
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-neutral-600 border border-neutral-200 rounded-lg hover:bg-neutral-100 transition-colors"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  Print
+                </button>
+                <button
+                  onClick={() => setViewingLetter(null)}
+                  className="p-1.5 hover:bg-neutral-200 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Letter document body */}
+            <div className="flex-1 overflow-y-auto p-8 bg-white" id="letter-print-area">
+              {renderLetterBody(viewingLetter.letter, viewingLetter.deal, viewingLetter.clientName)}
+            </div>
+
+            {/* Action bar */}
+            <div className="px-6 py-4 border-t border-neutral-200 bg-neutral-50 rounded-b-2xl flex-shrink-0">
+              {viewingLetter.letter.status === 'draft' && (
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <p className="text-xs text-neutral-600">Share this letter with the client, then mark when sent.</p>
+                  </div>
+                  <button
+                    onClick={() => updateLetterStatus(viewingLetter.letter.id, 'sent')}
+                    disabled={savingLetterStatus}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {savingLetterStatus ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                    Mark as Sent
+                  </button>
+                </div>
+              )}
+              {viewingLetter.letter.status === 'sent' && (
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <p className="text-xs text-neutral-600">Once the client has physically signed, confirm here.</p>
+                  </div>
+                  <button
+                    onClick={() => updateLetterStatus(viewingLetter.letter.id, 'signed')}
+                    disabled={savingLetterStatus}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                  >
+                    {savingLetterStatus ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                    Confirm Signed
+                  </button>
+                </div>
+              )}
+              {viewingLetter.letter.status === 'signed' && (
+                <div className="flex items-center gap-2 text-sm text-emerald-700">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span className="font-medium">Signed and confirmed</span>
+                  {viewingLetter.letter.signed_at && (
+                    <span className="text-neutral-500 text-xs">
+                      · {new Date(viewingLetter.letter.signed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
