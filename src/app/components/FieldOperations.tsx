@@ -16,13 +16,15 @@ import {
   Loader2,
   Paperclip,
   MessageCircle,
+  MessageSquare,
+  Music2,
 } from 'lucide-react';
 
 // Replace with your WhatsApp Business number (digits only, include country code, no +)
 const MANAGER_WHATSAPP = '2348000000000';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import type { Task } from '../../lib/database.types';
+import type { Task, TaskNote } from '../../lib/database.types';
 
 interface TaskWithRelations extends Task {
   project: { name: string } | null;
@@ -72,6 +74,11 @@ export function FieldOperations() {
   // Task status update
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
+  // Task notes
+  const [notesByTask, setNotesByTask] = useState<Record<string, TaskNote[]>>({});
+  const [newNoteText, setNewNoteText] = useState('');
+  const [addingNote, setAddingNote] = useState(false);
+
   // Weekly report state
   const [reportDoneStatus, setReportDoneStatus] = useState<Record<string, boolean>>({});
   const [reportEvidence, setReportEvidence] = useState<Record<string, string[]>>({});
@@ -108,9 +115,42 @@ export function FieldOperations() {
         .order('assigned_at', { ascending: false }),
     ]);
 
-    setActiveTasks((active as TaskWithRelations[]) ?? []);
-    setCompletedTasks((done as TaskWithRelations[]) ?? []);
+    const allActive = (active as TaskWithRelations[]) ?? [];
+    const allDone = (done as TaskWithRelations[]) ?? [];
+    setActiveTasks(allActive);
+    setCompletedTasks(allDone);
     setLoadingTasks(false);
+
+    // Load evidence and notes from DB (fixes the "evidence disappears on refresh" bug)
+    const allIds = [...allActive, ...allDone].map(t => t.id);
+    if (allIds.length > 0) {
+      const [{ data: evData }, { data: noteData }] = await Promise.all([
+        supabase.from('task_evidence').select('*').in('task_id', allIds),
+        supabase.from('task_notes').select('*').in('task_id', allIds).order('created_at', { ascending: true }),
+      ]);
+
+      if (evData) {
+        const grouped: Record<string, EvidenceFile[]> = {};
+        evData.forEach(ev => {
+          if (!grouped[ev.task_id]) grouped[ev.task_id] = [];
+          grouped[ev.task_id].push({
+            name: ev.file_name ?? ev.file_url.split('/').pop() ?? 'file',
+            url: ev.file_url,
+            type: ev.file_type ?? 'application/octet-stream',
+          });
+        });
+        setEvidenceByTask(grouped);
+      }
+
+      if (noteData) {
+        const grouped: Record<string, TaskNote[]> = {};
+        noteData.forEach(n => {
+          if (!grouped[n.task_id]) grouped[n.task_id] = [];
+          grouped[n.task_id].push(n as TaskNote);
+        });
+        setNotesByTask(grouped);
+      }
+    }
   }, [user]);
 
   useEffect(() => {
@@ -175,6 +215,26 @@ export function FieldOperations() {
     }));
   };
 
+  const addNote = async (taskId: string, body: string, noteType: TaskNote['note_type'] = 'text') => {
+    if (!body.trim() || !user || !profile) return;
+    setAddingNote(true);
+    const { data } = await supabase.from('task_notes').insert({
+      task_id: taskId,
+      worker_id: user.id,
+      worker_name: profile.full_name,
+      note_type: noteType,
+      body: body.trim(),
+    }).select().single();
+    if (data) {
+      setNotesByTask(prev => ({
+        ...prev,
+        [taskId]: [...(prev[taskId] ?? []), data as TaskNote],
+      }));
+      setNewNoteText('');
+    }
+    setAddingNote(false);
+  };
+
   const submitReport = async () => {
     if (!user || !profile) return;
     setSubmittingReport(true);
@@ -233,7 +293,7 @@ export function FieldOperations() {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*,video/*,.pdf"
+        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
         className="hidden"
         onChange={handleFileChange}
       />
@@ -647,20 +707,35 @@ export function FieldOperations() {
               {(evidenceByTask[selectedTask.id] ?? []).length > 0 ? (
                 <div className="space-y-2">
                   {evidenceByTask[selectedTask.id].map((file, idx) => (
-                    <div key={idx} className="flex items-center justify-between bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-2">
-                      <div className="flex items-center gap-2 text-sm text-neutral-700 min-w-0">
-                        {file.type.startsWith('image/') ? (
-                          <ImageIcon className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                        ) : file.type.startsWith('video/') ? (
-                          <Video className="w-4 h-4 text-purple-500 flex-shrink-0" />
+                    <div key={idx} className="bg-neutral-50 border border-neutral-200 rounded-xl overflow-hidden">
+                      {file.type.startsWith('image/') ? (
+                        <a href={file.url} target="_blank" rel="noopener noreferrer">
+                          <img src={file.url} alt={file.name} className="w-full max-h-48 object-cover" />
+                        </a>
+                      ) : file.type.startsWith('audio/') ? (
+                        <div className="p-3">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Music2 className="w-4 h-4 text-purple-500 flex-shrink-0" />
+                            <span className="text-xs text-neutral-600 truncate">{file.name}</span>
+                          </div>
+                          <audio controls src={file.url} className="w-full h-10" />
+                        </div>
+                      ) : file.type.startsWith('video/') ? (
+                        <video controls src={file.url} className="w-full max-h-48" />
+                      ) : null}
+                      <div className="flex items-center justify-between px-3 py-2">
+                        {!file.type.startsWith('image/') && !file.type.startsWith('audio/') && !file.type.startsWith('video/') ? (
+                          <div className="flex items-center gap-2 text-sm text-neutral-700 min-w-0">
+                            <Paperclip className="w-4 h-4 text-neutral-500 flex-shrink-0" />
+                            <a href={file.url} target="_blank" rel="noopener noreferrer" className="truncate text-blue-600 underline">{file.name}</a>
+                          </div>
                         ) : (
-                          <Paperclip className="w-4 h-4 text-neutral-500 flex-shrink-0" />
+                          <span className="text-xs text-neutral-400 truncate">{file.name}</span>
                         )}
-                        <span className="truncate">{file.name}</span>
+                        <button onClick={() => removeEvidence(selectedTask.id, idx)} className="ml-2 flex-shrink-0">
+                          <X className="w-4 h-4 text-neutral-400" />
+                        </button>
                       </div>
-                      <button onClick={() => removeEvidence(selectedTask.id, idx)}>
-                        <X className="w-4 h-4 text-neutral-400" />
-                      </button>
                     </div>
                   ))}
                 </div>
@@ -729,6 +804,79 @@ export function FieldOperations() {
                 <span className="font-medium">Task completed</span>
               </div>
             )}
+
+            {/* ── Notes & Updates ── */}
+            <div>
+              <h3 className="font-medium text-neutral-900 mb-3 flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-neutral-500" />
+                Notes & Updates
+              </h3>
+
+              {/* Existing notes */}
+              {(notesByTask[selectedTask.id] ?? []).length > 0 && (
+                <div className="space-y-2 mb-4">
+                  {notesByTask[selectedTask.id].map(note => (
+                    <div key={note.id} className={`rounded-xl p-3 border ${
+                      note.note_type === 'whatsapp_log' ? 'bg-green-50 border-green-200' : 'bg-neutral-50 border-neutral-200'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        {note.note_type === 'whatsapp_log' ? (
+                          <MessageCircle className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                        ) : (
+                          <MessageSquare className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
+                        )}
+                        <span className="text-xs text-neutral-500">
+                          {new Date(note.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                          {' · '}
+                          {new Date(note.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {note.note_type === 'whatsapp_log' && (
+                          <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">Sent to manager</span>
+                        )}
+                      </div>
+                      <p className="text-sm text-neutral-800">{note.body}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(notesByTask[selectedTask.id] ?? []).length === 0 && (
+                <p className="text-xs text-neutral-400 text-center py-2 mb-3">No notes yet.</p>
+              )}
+
+              {/* New note input */}
+              <textarea
+                rows={2}
+                placeholder="Add a field update, observation, or progress note..."
+                value={newNoteText}
+                onChange={e => setNewNoteText(e.target.value)}
+                className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              />
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => addNote(selectedTask.id, newNoteText)}
+                  disabled={!newNoteText.trim() || addingNote}
+                  className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+                >
+                  {addingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+                  Save Note
+                </button>
+                <a
+                  href={`https://wa.me/${MANAGER_WHATSAPP}?text=${encodeURIComponent(`Update on "${selectedTask.name}" (${selectedTask.project?.name ?? 'project'}): ${newNoteText}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => { if (newNoteText.trim()) { addNote(selectedTask.id, newNoteText, 'whatsapp_log'); } }}
+                  className={`px-4 py-2.5 bg-green-600 text-white text-sm font-medium rounded-xl flex items-center gap-2 active:scale-[0.98] transition-transform ${!newNoteText.trim() ? 'pointer-events-none opacity-40' : ''}`}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Send to Manager
+                </a>
+              </div>
+              <p className="text-xs text-neutral-400 mt-2 text-center">
+                "Send to Manager" opens WhatsApp and logs the note here automatically.
+              </p>
+            </div>
+
           </div>
         </div>
       )}

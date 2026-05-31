@@ -4,6 +4,34 @@
 -- Workers can log in with:  email below / password: Worker@2025
 -- ============================================================
 
+-- ── 0. task_notes table (run once — safe to re-run) ──────────────────────────
+CREATE TABLE IF NOT EXISTS task_notes (
+  id           uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
+  task_id      uuid        NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  worker_id    uuid        REFERENCES profiles(id),
+  worker_name  text        NOT NULL,
+  note_type    text        NOT NULL DEFAULT 'text'
+                           CHECK (note_type IN ('text', 'whatsapp_log', 'system')),
+  body         text        NOT NULL,
+  created_at   timestamptz DEFAULT now()
+);
+
+ALTER TABLE task_notes ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'task_notes' AND policyname = 'auth read task_notes'
+  ) THEN
+    CREATE POLICY "auth read task_notes" ON task_notes FOR SELECT USING (auth.role() = 'authenticated');
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'task_notes' AND policyname = 'worker insert own task_notes'
+  ) THEN
+    CREATE POLICY "worker insert own task_notes" ON task_notes FOR INSERT
+      WITH CHECK (auth.uid() = worker_id OR auth.uid() IS NOT NULL);
+  END IF;
+END $$;
+
 DO $$
 DECLARE
   w1   uuid := 'b1111111-1111-1111-1111-111111111111';
@@ -98,3 +126,145 @@ BEGIN
     (proj2, ph4, 'Ceiling board and cornice fitting', 'pending',     w3, 'Tunde Adeleke', 'medium', NULL);
 
 END $$;
+
+
+-- ── 5. Task notes — field updates from workers ───────────────────────────────
+-- (run after the DO block above so tasks exist)
+
+INSERT INTO task_notes (task_id, worker_id, worker_name, note_type, body, created_at)
+SELECT t.id, 'b1111111-1111-1111-1111-111111111111', 'Emeka Okonkwo', 'text',
+  'Collected samples from 4 test pits. Sent batch to geotechnical lab. Results expected in 48 hrs.',
+  now() - interval '12 days'
+FROM tasks t WHERE t.name = 'Excavation and soil testing' LIMIT 1;
+
+INSERT INTO task_notes (task_id, worker_id, worker_name, note_type, body, created_at)
+SELECT t.id, 'b1111111-1111-1111-1111-111111111111', 'Emeka Okonkwo', 'whatsapp_log',
+  'Lab confirmed: bearing capacity adequate for 4-storey structure. Signed off. Moving to concrete mix.',
+  now() - interval '10 days'
+FROM tasks t WHERE t.name = 'Excavation and soil testing' LIMIT 1;
+
+INSERT INTO task_notes (task_id, worker_id, worker_name, note_type, body, created_at)
+SELECT t.id, 'b2222222-2222-2222-2222-222222222222', 'Aisha Musa', 'text',
+  'Block A slab poured this morning. All 22 crew present. Mix ratio verified by site engineer — 1:2:4.',
+  now() - interval '3 days'
+FROM tasks t WHERE t.name = 'Foundation slab pour — Block A' LIMIT 1;
+
+INSERT INTO task_notes (task_id, worker_id, worker_name, note_type, body, created_at)
+SELECT t.id, 'b2222222-2222-2222-2222-222222222222', 'Aisha Musa', 'whatsapp_log',
+  'Heavy rain started at 2pm — covered slab immediately with tarpaulin. Curing will likely need extra 24 hrs. Monitoring temperature.',
+  now() - interval '2 days'
+FROM tasks t WHERE t.name = 'Foundation slab pour — Block A' LIMIT 1;
+
+INSERT INTO task_notes (task_id, worker_id, worker_name, note_type, body, created_at)
+SELECT t.id, 'b2222222-2222-2222-2222-222222222222', 'Aisha Musa', 'text',
+  'Day 2 check — slab surface hardening well. No cracks observed. Will wet-cure for remaining 5 days.',
+  now() - interval '1 day'
+FROM tasks t WHERE t.name = 'Foundation slab pour — Block A' LIMIT 1;
+
+INSERT INTO task_notes (task_id, worker_id, worker_name, note_type, body, created_at)
+SELECT t.id, 'b3333333-3333-3333-3333-333333333333', 'Tunde Adeleke', 'text',
+  'Drainage channel excavated 60m of planned 80m. Pipe delivery delayed — supplier says Monday.',
+  now() - interval '4 days'
+FROM tasks t WHERE t.name = 'Drainage channel installation' LIMIT 1;
+
+INSERT INTO task_notes (task_id, worker_id, worker_name, note_type, body, created_at)
+SELECT t.id, 'b3333333-3333-3333-3333-333333333333', 'Tunde Adeleke', 'text',
+  'Pipes arrived this morning. Resuming installation. Should complete by end of week.',
+  now() - interval '1 day'
+FROM tasks t WHERE t.name = 'Drainage channel installation' LIMIT 1;
+
+INSERT INTO task_notes (task_id, worker_id, worker_name, note_type, body, created_at)
+SELECT t.id, 'b1111111-1111-1111-1111-111111111111', 'Emeka Okonkwo', 'text',
+  'Inspector no-show — third rescheduled date this month. Need management to escalate with contractor.',
+  now() - interval '1 day'
+FROM tasks t WHERE t.name = 'Asbestos inspection review' LIMIT 1;
+
+INSERT INTO task_notes (task_id, worker_id, worker_name, note_type, body, created_at)
+SELECT t.id, 'b1111111-1111-1111-1111-111111111111', 'Emeka Okonkwo', 'whatsapp_log',
+  'URGENT: Asbestos inspector missed appointment AGAIN. This is blocking all Level 2 finishing work. Please call contractor directly.',
+  now() - interval '4 hours'
+FROM tasks t WHERE t.name = 'Asbestos inspection review' LIMIT 1;
+
+INSERT INTO task_notes (task_id, worker_id, worker_name, note_type, body, created_at)
+SELECT t.id, 'b3333333-3333-3333-3333-333333333333', 'Tunde Adeleke', 'text',
+  'Level 2 partition 70% removed. Found what looks like a load-bearing beam — stopped work immediately.',
+  now() - interval '6 hours'
+FROM tasks t WHERE t.name = 'Partition wall removal — Level 2' LIMIT 1;
+
+INSERT INTO task_notes (task_id, worker_id, worker_name, note_type, body, created_at)
+SELECT t.id, 'b3333333-3333-3333-3333-333333333333', 'Tunde Adeleke', 'whatsapp_log',
+  'Work halted on Level 2 partition. Unexpected structural beam found. Awaiting structural engineer sign-off before continuing.',
+  now() - interval '5 hours'
+FROM tasks t WHERE t.name = 'Partition wall removal — Level 2' LIMIT 1;
+
+INSERT INTO task_notes (task_id, worker_id, worker_name, note_type, body, created_at)
+SELECT t.id, 'b3333333-3333-3333-3333-333333333333', 'Tunde Adeleke', 'text',
+  'Ceiling boards in storage room removed without issue. Area cleared and ready for new board installation.',
+  now() - interval '5 days'
+FROM tasks t WHERE t.name = 'Remove existing false ceiling' LIMIT 1;
+
+
+-- ── 6. Mock evidence (placeholder site photos) ───────────────────────────────
+
+INSERT INTO task_evidence (task_id, file_url, file_name, file_type, uploaded_by)
+SELECT t.id,
+  'https://picsum.photos/seed/excavate1/800/600',
+  'soil_test_pit_1.jpg', 'image/jpeg',
+  'b1111111-1111-1111-1111-111111111111'
+FROM tasks t WHERE t.name = 'Excavation and soil testing' LIMIT 1;
+
+INSERT INTO task_evidence (task_id, file_url, file_name, file_type, uploaded_by)
+SELECT t.id,
+  'https://picsum.photos/seed/concrete2/800/600',
+  'foundation_slab_A_pour.jpg', 'image/jpeg',
+  'b2222222-2222-2222-2222-222222222222'
+FROM tasks t WHERE t.name = 'Foundation slab pour — Block A' LIMIT 1;
+
+INSERT INTO task_evidence (task_id, file_url, file_name, file_type, uploaded_by)
+SELECT t.id,
+  'https://picsum.photos/seed/slab3/800/600',
+  'slab_covered_rain.jpg', 'image/jpeg',
+  'b2222222-2222-2222-2222-222222222222'
+FROM tasks t WHERE t.name = 'Foundation slab pour — Block A' LIMIT 1;
+
+INSERT INTO task_evidence (task_id, file_url, file_name, file_type, uploaded_by)
+SELECT t.id,
+  'https://picsum.photos/seed/demo1/800/600',
+  'partition_wall_level2.jpg', 'image/jpeg',
+  'b3333333-3333-3333-3333-333333333333'
+FROM tasks t WHERE t.name = 'Partition wall removal — Level 2' LIMIT 1;
+
+INSERT INTO task_evidence (task_id, file_url, file_name, file_type, uploaded_by)
+SELECT t.id,
+  'https://picsum.photos/seed/ceiling1/800/600',
+  'false_ceiling_removed.jpg', 'image/jpeg',
+  'b3333333-3333-3333-3333-333333333333'
+FROM tasks t WHERE t.name = 'Remove existing false ceiling' LIMIT 1;
+
+
+-- ── 7. Mock weekly report for Emeka ──────────────────────────────────────────
+INSERT INTO weekly_reports (
+  worker_id, worker_name, week_start, hours_worked, incident_notes, status, reviewed_by, reviewed_at
+) VALUES (
+  'b1111111-1111-1111-1111-111111111111',
+  'Emeka Okonkwo',
+  date_trunc('week', now() - interval '1 week')::date,
+  44,
+  'Asbestos inspector failed to show for scheduled inspection at VI site. Third missed appointment — delays finishing work on Level 2.',
+  'pending-review',
+  NULL,
+  NULL
+) ON CONFLICT DO NOTHING;
+
+INSERT INTO weekly_reports (
+  worker_id, worker_name, week_start, hours_worked, incident_notes, status, reviewed_by, reviewed_at
+) VALUES (
+  'b2222222-2222-2222-2222-222222222222',
+  'Aisha Musa',
+  date_trunc('week', now() - interval '1 week')::date,
+  38,
+  'Heavy rain on Thursday afternoon disrupted Block A curing schedule. Took emergency cover measures. No structural impact expected.',
+  'approved',
+  'Admin',
+  now() - interval '2 days'
+) ON CONFLICT DO NOTHING;

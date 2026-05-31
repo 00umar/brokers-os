@@ -142,6 +142,16 @@ export interface TaskEvidence {
   created_at: string
 }
 
+export interface TaskNote {
+  id: string
+  task_id: string
+  worker_id?: string
+  worker_name: string
+  note_type: 'text' | 'whatsapp_log' | 'system'
+  body: string
+  created_at: string
+}
+
 export interface WeeklyReport {
   id: string
   worker_id?: string
@@ -207,6 +217,7 @@ export interface Database {
       phases: { Row: Phase; Insert: Omit<Phase, 'id' | 'created_at'>; Update: Partial<Phase> }
       tasks: { Row: Task; Insert: Omit<Task, 'id' | 'created_at'>; Update: Partial<Task> }
       task_evidence: { Row: TaskEvidence; Insert: Omit<TaskEvidence, 'id' | 'created_at'>; Update: Partial<TaskEvidence> }
+      task_notes: { Row: TaskNote; Insert: Omit<TaskNote, 'id' | 'created_at'>; Update: Partial<TaskNote> }
       weekly_reports: { Row: WeeklyReport; Insert: Omit<WeeklyReport, 'id' | 'created_at'>; Update: Partial<WeeklyReport> }
       report_task_items: { Row: ReportTaskItem; Insert: Omit<ReportTaskItem, 'id' | 'created_at'>; Update: Partial<ReportTaskItem> }
       leads: { Row: Lead; Insert: Omit<Lead, 'id' | 'created_at'>; Update: Partial<Lead> }
