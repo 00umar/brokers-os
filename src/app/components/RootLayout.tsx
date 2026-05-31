@@ -26,7 +26,7 @@ export function RootLayout() {
     ? profile.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     : '?';
 
-  const navigation = [
+  const allNavItems = [
     { name: 'Dashboard', to: '/app', icon: LayoutDashboard },
     { name: 'Brokerage Operations', to: '/app/brokerage', icon: Building2 },
     { name: 'Sales & Marketing', to: '/app/sales', icon: TrendingUp },
@@ -34,6 +34,10 @@ export function RootLayout() {
     { name: 'Workforce KPI', to: '/app/workforce', icon: Users },
     { name: 'Field Operations', to: '/app/field', icon: Smartphone },
   ];
+
+  const navigation = profile?.role === 'field_worker'
+    ? allNavItems.filter(item => item.to === '/app/field')
+    : allNavItems;
 
   const closeMobile = () => setMobileOpen(false);
 

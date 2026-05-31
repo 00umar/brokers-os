@@ -18,6 +18,8 @@ import {
   MessageCircle,
   MessageSquare,
   Music2,
+  Mic,
+  MicOff,
 } from 'lucide-react';
 
 // Replace with your WhatsApp Business number (digits only, include country code, no +)
@@ -89,6 +91,12 @@ export function FieldOperations() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeUploadTaskId = useRef<string | null>(null);
+
+  // Voice recording
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingFor, setRecordingFor] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingChunks = useRef<Blob[]>([]);
 
   const weekInfo = getWeekInfo();
 
@@ -180,16 +188,12 @@ export function FieldOperations() {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    const taskId = activeUploadTaskId.current;
-    if (!file || !taskId || !user) return;
-
+  const uploadEvidenceFile = async (taskId: string, file: File) => {
+    if (!user) return;
     setUploadingFor(taskId);
     const path = `${user.id}/${taskId}/${Date.now()}_${file.name}`;
-    const { error: uploadError } = await supabase.storage.from('evidence').upload(path, file);
-
-    if (!uploadError) {
+    const { error } = await supabase.storage.from('evidence').upload(path, file);
+    if (!error) {
       const { data: { publicUrl } } = supabase.storage.from('evidence').getPublicUrl(path);
       await supabase.from('task_evidence').insert({
         task_id: taskId,
@@ -203,9 +207,46 @@ export function FieldOperations() {
         [taskId]: [...(prev[taskId] ?? []), { name: file.name, url: publicUrl, type: file.type }],
       }));
     }
-
     setUploadingFor(null);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const taskId = activeUploadTaskId.current;
+    if (!file || !taskId || !user) return;
+    await uploadEvidenceFile(taskId, file);
     e.target.value = '';
+  };
+
+  const startRecording = async (taskId: string) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      recordingChunks.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordingChunks.current.push(e.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const mimeType = recorder.mimeType || 'audio/webm';
+        const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'm4a' : 'webm';
+        const blob = new Blob(recordingChunks.current, { type: mimeType });
+        const file = new File([blob], `voice_${Date.now()}.${ext}`, { type: mimeType });
+        await uploadEvidenceFile(taskId, file);
+        setIsRecording(false);
+        setRecordingFor(null);
+      };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+      setRecordingFor(taskId);
+    } catch {
+      alert('Microphone access denied. Please allow microphone access to record voice notes.');
+    }
+  };
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop();
   };
 
   const removeEvidence = (taskId: string, idx: number) => {
@@ -681,28 +722,62 @@ export function FieldOperations() {
             {/* Upload Evidence */}
             <div>
               <h3 className="font-medium text-neutral-900 mb-3">Evidence</h3>
-              <div className="grid grid-cols-2 gap-3 mb-3">
+              <div className="grid grid-cols-3 gap-2 mb-3">
                 <button
                   onClick={() => triggerFileUpload(selectedTask.id)}
-                  disabled={uploadingFor === selectedTask.id}
-                  className="flex flex-col items-center gap-2 p-5 bg-white border-2 border-neutral-200 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
+                  disabled={uploadingFor === selectedTask.id || isRecording}
+                  className="flex flex-col items-center gap-2 p-4 bg-white border-2 border-neutral-200 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
                 >
                   {uploadingFor === selectedTask.id ? (
-                    <Loader2 className="w-7 h-7 text-blue-600 animate-spin" />
+                    <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
                   ) : (
-                    <Camera className="w-7 h-7 text-blue-600" />
+                    <Camera className="w-6 h-6 text-blue-600" />
                   )}
-                  <span className="text-sm font-medium text-neutral-900">Photo / Video</span>
+                  <span className="text-xs font-medium text-neutral-900 text-center">Photo / Video</span>
+                </button>
+                <button
+                  onClick={() =>
+                    isRecording && recordingFor === selectedTask.id
+                      ? stopRecording()
+                      : startRecording(selectedTask.id)
+                  }
+                  disabled={uploadingFor === selectedTask.id || (isRecording && recordingFor !== selectedTask.id)}
+                  className={`flex flex-col items-center gap-2 p-4 border-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50 ${
+                    isRecording && recordingFor === selectedTask.id
+                      ? 'bg-red-50 border-red-300 animate-pulse'
+                      : 'bg-white border-neutral-200'
+                  }`}
+                >
+                  {isRecording && recordingFor === selectedTask.id ? (
+                    <MicOff className="w-6 h-6 text-red-600" />
+                  ) : (
+                    <Mic className="w-6 h-6 text-purple-600" />
+                  )}
+                  <span className="text-xs font-medium text-neutral-900 text-center">
+                    {isRecording && recordingFor === selectedTask.id ? 'Stop' : 'Voice Note'}
+                  </span>
                 </button>
                 <button
                   onClick={() => triggerFileUpload(selectedTask.id)}
-                  disabled={uploadingFor === selectedTask.id}
-                  className="flex flex-col items-center gap-2 p-5 bg-white border-2 border-neutral-200 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
+                  disabled={uploadingFor === selectedTask.id || isRecording}
+                  className="flex flex-col items-center gap-2 p-4 bg-white border-2 border-neutral-200 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
                 >
-                  <Upload className="w-7 h-7 text-orange-600" />
-                  <span className="text-sm font-medium text-neutral-900">Upload File</span>
+                  <Upload className="w-6 h-6 text-orange-600" />
+                  <span className="text-xs font-medium text-neutral-900 text-center">Upload File</span>
                 </button>
               </div>
+              {isRecording && recordingFor === selectedTask.id && (
+                <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0" />
+                  <span className="text-sm text-red-700 font-medium">Recording… tap Stop when done</span>
+                </div>
+              )}
+              {uploadingFor === selectedTask.id && !isRecording && (
+                <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                  <Loader2 className="w-4 h-4 text-blue-600 animate-spin flex-shrink-0" />
+                  <span className="text-sm text-blue-700">Uploading…</span>
+                </div>
+              )}
 
               {(evidenceByTask[selectedTask.id] ?? []).length > 0 ? (
                 <div className="space-y-2">
