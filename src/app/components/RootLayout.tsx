@@ -14,13 +14,15 @@ import {
   LogOut,
   Settings,
   X,
+  Clock,
+  ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 export function RootLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, showInactivityWarning, resetInactivityTimer } = useAuth();
 
   const initials = profile?.full_name
     ? profile.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
@@ -193,6 +195,42 @@ export function RootLayout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Inactivity warning modal */}
+      {showInactivityWarning && (
+        <div className="fixed inset-0 bg-black/60 z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <ShieldAlert className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-neutral-900 text-sm">Still there?</h3>
+                <p className="text-xs text-neutral-500 flex items-center gap-1 mt-0.5">
+                  <Clock className="w-3 h-3" /> Logging out in 2 minutes
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-neutral-600 mb-5">
+              You've been inactive for a while. For security, you'll be automatically signed out in 2 minutes.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={resetInactivityTimer}
+                className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                Stay logged in
+              </button>
+              <button
+                onClick={signOut}
+                className="flex-1 py-2.5 bg-neutral-100 text-neutral-700 rounded-xl text-sm font-medium hover:bg-neutral-200 transition-colors"
+              >
+                Log out now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,16 +1,21 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import type { Profile } from '../lib/database.types'
+
+const INACTIVITY_MS = 30 * 60 * 1000  // 30 minutes
+const WARNING_MS   =  2 * 60 * 1000   // warn 2 min before logout
 
 interface AuthContextType {
   user: User | null
   session: Session | null
   profile: Profile | null
   loading: boolean
+  showInactivityWarning: boolean
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
+  resetInactivityTimer: () => void
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -20,6 +25,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showInactivityWarning, setShowInactivityWarning] = useState(false)
+
+  const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const warningTimer    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const resetTimerRef   = useRef<() => void>(() => {})
+
+  async function signOut() {
+    await supabase.auth.signOut()
+  }
+
+  const resetInactivityTimer = useCallback(() => {
+    if (inactivityTimer.current) clearTimeout(inactivityTimer.current)
+    if (warningTimer.current)    clearTimeout(warningTimer.current)
+    setShowInactivityWarning(false)
+    warningTimer.current    = setTimeout(() => setShowInactivityWarning(true), INACTIVITY_MS - WARNING_MS)
+    inactivityTimer.current = setTimeout(() => signOut(), INACTIVITY_MS)
+  }, [])
+
+  resetTimerRef.current = resetInactivityTimer
+
+  // Start / stop inactivity tracking based on login state
+  useEffect(() => {
+    if (!user) {
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current)
+      if (warningTimer.current)    clearTimeout(warningTimer.current)
+      setShowInactivityWarning(false)
+      return
+    }
+    const handler = () => resetTimerRef.current()
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'] as const
+    events.forEach(e => window.addEventListener(e, handler, { passive: true }))
+    resetTimerRef.current()
+    return () => {
+      events.forEach(e => window.removeEventListener(e, handler))
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current)
+      if (warningTimer.current)    clearTimeout(warningTimer.current)
+    }
+  }, [user])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -50,10 +93,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error?.message ?? null }
   }
 
-  async function signOut() {
-    await supabase.auth.signOut()
-  }
-
   async function refreshProfile() {
     const { data: { user: currentUser } } = await supabase.auth.getUser()
     if (!currentUser) return
@@ -62,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading, signIn, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, profile, loading, showInactivityWarning, signIn, signOut, refreshProfile, resetInactivityTimer }}>
       {children}
     </AuthContext.Provider>
   )
