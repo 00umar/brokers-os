@@ -52,9 +52,9 @@ export default function Login() {
         {/* Logo */}
         <div className="mb-8 text-center">
           <Link to="/" className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600 mb-4">
-            <span className="text-white font-bold text-xl">7</span>
+            <span className="text-white font-bold text-xl">B</span>
           </Link>
-          <h1 className="text-white text-2xl font-semibold">765 Operations</h1>
+          <h1 className="text-white text-2xl font-semibold">BrokerOS</h1>
           <p className="text-gray-400 text-sm mt-1">{titles[mode]}</p>
         </div>
 
@@ -83,7 +83,7 @@ export default function Login() {
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     required
-                    placeholder="you@765realty.com"
+                    placeholder="you@yourcompany.com"
                     className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-3 py-2.5 text-sm placeholder:text-gray-600 focus:outline-none focus:border-blue-500"
                   />
                 </div>
@@ -118,7 +118,8 @@ export default function Login() {
                   {loading ? 'Signing in…' : 'Sign in'}
                 </button>
                 <p className="text-center text-gray-600 text-xs mt-2">
-                  Access is by invitation only. Contact your administrator.
+                  Don't have a workspace?{' '}
+                  <Link to="/signup" className="text-blue-400 hover:text-blue-300 transition-colors">Start free trial</Link>
                 </p>
               </form>
             )}
@@ -134,7 +135,7 @@ export default function Login() {
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     required
-                    placeholder="you@765realty.com"
+                    placeholder="you@yourcompany.com"
                     className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-3 py-2.5 text-sm placeholder:text-gray-600 focus:outline-none focus:border-blue-500"
                   />
                 </div>
