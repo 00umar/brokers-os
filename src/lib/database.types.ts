@@ -15,6 +15,8 @@ export interface Profile {
   department?: string
   status?: 'pending' | 'active' | 'suspended'
   allowed_modules?: string[] | null
+  company_id?: string | null
+  is_super_admin?: boolean
   created_at: string
 }
 

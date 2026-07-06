@@ -143,6 +143,7 @@ export function WorkforceKPI() {
         hours_worked: formData.hoursWorked ? Number(formData.hoursWorked) : null,
         incident_notes: formData.incidentNotes || null,
         status: 'pending-review',
+        company_id: profile.company_id ?? undefined,
       })
       .select()
       .single();

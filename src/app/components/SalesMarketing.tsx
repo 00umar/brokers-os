@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 import type { Lead, SalesTask } from '../../lib/database.types';
 import {
   Plus, Search, Filter, Phone, Mail, Building2, Calendar,
@@ -65,6 +66,7 @@ const emptyLeadForm = {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function SalesMarketing() {
+  const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState('leads');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -132,6 +134,7 @@ export function SalesMarketing() {
       notes: addLeadForm.notes || undefined,
       follow_up_date: addLeadForm.follow_up_date || undefined,
       status: 'new',
+      company_id: profile?.company_id ?? undefined,
     }).select().single();
     if (data) setLeads(p => [data as Lead, ...p]);
     setShowAddLead(false);

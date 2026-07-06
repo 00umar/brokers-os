@@ -290,6 +290,7 @@ export function FieldOperations() {
         hours_worked: hoursWorked ? parseFloat(hoursWorked) : null,
         incident_notes: incidentNotes || null,
         status: 'pending-review',
+        company_id: profile.company_id ?? undefined,
       })
       .select()
       .single();

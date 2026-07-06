@@ -299,6 +299,7 @@ export function BrokerageOperations() {
       assigned_to_name: salesRequestForm.assigned_to_name || undefined,
       due_date: salesRequestForm.due_date || undefined,
       status: 'pending',
+      company_id: profile?.company_id ?? undefined,
     }).select().single();
     if (data) {
       setDealSalesTasks(p => [data as SalesTask, ...p]);
@@ -324,6 +325,7 @@ export function BrokerageOperations() {
       letter_type: letterType,
       party_type: partyType,
       status: 'draft',
+      company_id: profile?.company_id ?? undefined,
     }).select().single();
     if (data) {
       const letter = data as OfferLetter;

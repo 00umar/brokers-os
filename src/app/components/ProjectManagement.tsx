@@ -301,6 +301,7 @@ export function ProjectManagement() {
       budget: newProjectForm.budget ? parseFloat(newProjectForm.budget.replace(/[^\d.]/g, '')) : null,
       pm_name: newProjectForm.pm_name || null,
       status: 'active',
+      company_id: profile?.company_id ?? undefined,
     });
     setSavingProject(false);
     if (!error) {
@@ -325,6 +326,7 @@ export function ProjectManagement() {
       status: 'pending',
       start_date: newPhaseForm.start_date || null,
       end_date: newPhaseForm.end_date || null,
+      company_id: profile?.company_id ?? undefined,
     }).select().single();
     if (data) {
       setPhases(prev => [...prev, data as Phase]);
@@ -355,6 +357,7 @@ export function ProjectManagement() {
       priority: newTaskForm.priority,
       notes: newTaskForm.notes || undefined,
       deliverables: newTaskForm.deliverables || undefined,
+      company_id: profile?.company_id ?? undefined,
     }).select().single();
     if (data) {
       setTasks(prev => [...prev, data as Task]);
