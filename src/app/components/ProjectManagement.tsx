@@ -29,10 +29,15 @@ import {
   Flag,
   ChevronUp,
   MoreVertical,
+  Image as ImageIcon,
+  Mic,
+  FileText,
+  MessageSquare,
+  User,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import type { Project, Phase, Task, Profile } from '../../lib/database.types';
+import type { Project, Phase, Task, Profile, TaskEvidence, TaskNote } from '../../lib/database.types';
 
 interface TaskWithRelations extends Task {
   project?: { name: string } | null;
@@ -274,6 +279,9 @@ export function ProjectManagement() {
   const [copiedClientLink, setCopiedClientLink] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
+  const [taskEvidence, setTaskEvidence] = useState<TaskEvidence[]>([]);
+  const [taskNotes, setTaskNotes] = useState<TaskNote[]>([]);
+  const [loadingTaskUpdates, setLoadingTaskUpdates] = useState(false);
 
   const fetchProjects = useCallback(async () => {
     setLoadingProjects(true);
@@ -445,6 +453,20 @@ export function ProjectManagement() {
     navigator.clipboard.writeText(url);
     setCopiedClientLink(true);
     setTimeout(() => setCopiedClientLink(false), 2000);
+  };
+
+  const openTaskDetail = async (task: TaskWithRelations) => {
+    setSelectedTask(task);
+    setTaskEvidence([]);
+    setTaskNotes([]);
+    setLoadingTaskUpdates(true);
+    const [{ data: ev }, { data: notes }] = await Promise.all([
+      supabase.from('task_evidence').select('*').eq('task_id', task.id).order('created_at'),
+      supabase.from('task_notes').select('*').eq('task_id', task.id).order('created_at'),
+    ]);
+    setTaskEvidence(ev ?? []);
+    setTaskNotes((notes ?? []) as TaskNote[]);
+    setLoadingTaskUpdates(false);
   };
 
   const togglePhaseCollapse = (phaseId: string) => {
@@ -903,7 +925,7 @@ export function ProjectManagement() {
                                   ) : (
                                     <div className="space-y-2">
                                       {activeTasks.map(task => (
-                                        <div key={task.id} onClick={() => setSelectedTask(task)} className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer hover:shadow-sm transition-shadow ${
+                                        <div key={task.id} onClick={() => openTaskDetail(task)} className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer hover:shadow-sm transition-shadow ${
                                           task.status === 'blocked' ? 'bg-red-50 border border-red-100' :
                                           task.status === 'in-progress' ? 'bg-blue-50/50 border border-blue-100' : 'bg-neutral-50 border border-neutral-100'
                                         }`}>
@@ -915,7 +937,11 @@ export function ProjectManagement() {
                                           <div className="flex-1 min-w-0">
                                             <p className={`text-sm font-medium leading-snug ${task.status === 'blocked' ? 'text-red-700' : 'text-neutral-800'}`}>{task.name}</p>
                                             {task.deliverables && <p className="text-xs text-neutral-500 mt-0.5 line-clamp-1">{task.deliverables}</p>}
-                                            {task.assigned_to_name && <p className="text-xs text-neutral-400 mt-0.5">{task.assigned_to_name}</p>}
+                                            {task.assigned_to_name && (
+                                              <p className="text-xs text-blue-500 mt-0.5 font-medium">
+                                                {task.assigned_to_name}
+                                              </p>
+                                            )}
                                             {task.due_date && <p className="text-xs text-neutral-400 flex items-center gap-1 mt-0.5"><Calendar className="w-3 h-3" />{new Date(task.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</p>}
                                           </div>
                                           {task.status !== 'blocked' && (
@@ -1014,12 +1040,16 @@ export function ProjectManagement() {
                                   ) : (
                                     <div className="space-y-2">
                                       {doneTasks.map(task => (
-                                        <div key={task.id} onClick={() => setSelectedTask(task)} className="flex items-start gap-2.5 p-2.5 bg-white rounded-lg border border-green-100 cursor-pointer hover:shadow-sm transition-shadow">
+                                        <div key={task.id} onClick={() => openTaskDetail(task)} className="flex items-start gap-2.5 p-2.5 bg-white rounded-lg border border-green-100 cursor-pointer hover:shadow-sm transition-shadow">
                                           <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
                                           <div className="flex-1 min-w-0">
                                             <p className="text-sm font-medium text-neutral-600 line-through leading-snug">{task.name}</p>
                                             {task.deliverables && <p className="text-xs text-green-700 mt-0.5 line-clamp-2">{task.deliverables}</p>}
-                                            {task.assigned_to_name && <p className="text-xs text-neutral-400 mt-0.5">{task.assigned_to_name}</p>}
+                                            {task.assigned_to_name && (
+                                              <p className="text-xs text-blue-500 mt-0.5 font-medium">
+                                                {task.assigned_to_name}
+                                              </p>
+                                            )}
                                           </div>
                                         </div>
                                       ))}
@@ -1126,11 +1156,12 @@ export function ProjectManagement() {
         const priorityColors = { high: 'bg-red-100 text-red-700', medium: 'bg-amber-100 text-amber-700', low: 'bg-green-100 text-green-700' };
         const statusLabels: Record<string, string> = { pending: 'Pending', 'in-progress': 'In Progress', done: 'Delivered', blocked: 'Blocked' };
         const statusColors: Record<string, string> = { pending: 'bg-neutral-100 text-neutral-600', 'in-progress': 'bg-blue-100 text-blue-700', done: 'bg-green-100 text-green-700', blocked: 'bg-red-100 text-red-700' };
+        const hasUpdates = taskEvidence.length > 0 || taskNotes.length > 0;
         return (
           <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-4" onClick={() => setSelectedTask(null)}>
-            <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
               {/* Header */}
-              <div className="px-5 py-4 border-b border-neutral-100 flex items-start justify-between gap-3">
+              <div className="px-5 py-4 border-b border-neutral-100 flex items-start justify-between gap-3 flex-shrink-0">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${statusColors[t.status]}`}>
@@ -1149,24 +1180,27 @@ export function ProjectManagement() {
                 </button>
               </div>
 
-              <div className="px-5 py-4 space-y-4">
-                {/* Meta row */}
-                <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                  {t.assigned_to_name && (
-                    <div>
-                      <p className="text-xs text-neutral-400 mb-0.5">Assigned To</p>
-                      <p className="font-medium text-neutral-800">{t.assigned_to_name}</p>
+              <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
+                {/* Assignee card */}
+                {t.assigned_to_name && (
+                  <div className="flex items-center gap-3 p-3 bg-neutral-50 rounded-xl border border-neutral-100">
+                    <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                      {t.assigned_to_name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
                     </div>
-                  )}
-                  {t.due_date && (
-                    <div>
-                      <p className="text-xs text-neutral-400 mb-0.5">Due Date</p>
-                      <p className="font-medium text-neutral-800">{new Date(t.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-neutral-900">{t.assigned_to_name}</p>
+                      <p className="text-xs text-neutral-400">Assigned field worker</p>
                     </div>
-                  )}
-                </div>
+                    {t.due_date && (
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-xs text-neutral-400">Due</p>
+                        <p className="text-xs font-medium text-neutral-700">{new Date(t.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
-                {/* Deliverables */}
+                {/* Deliverable */}
                 {t.deliverables && (
                   <div>
                     <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
@@ -1176,47 +1210,121 @@ export function ProjectManagement() {
                   </div>
                 )}
 
-                {/* Notes */}
+                {/* Task notes (internal) */}
                 {t.notes && (
                   <div>
-                    <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1.5">Notes</p>
+                    <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1.5">Internal Notes</p>
                     <p className="text-sm text-neutral-700 bg-neutral-50 rounded-lg px-3 py-2.5 border border-neutral-100 leading-relaxed whitespace-pre-wrap">{t.notes}</p>
                   </div>
                 )}
 
-                {/* Empty state */}
-                {!t.deliverables && !t.notes && !t.assigned_to_name && !t.due_date && (
-                  <p className="text-sm text-neutral-400 italic text-center py-2">No additional details recorded for this task.</p>
+                {/* ── Field Worker Updates ── */}
+                <div>
+                  <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                    <User className="w-3 h-3" /> Field Worker Updates
+                    {hasUpdates && <span className="bg-blue-100 text-blue-700 rounded-full px-1.5 py-0.5 text-[9px] font-bold">{taskEvidence.length + taskNotes.length}</span>}
+                  </p>
+
+                  {loadingTaskUpdates ? (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                    </div>
+                  ) : !hasUpdates ? (
+                    <div className="text-center py-6 text-neutral-400 bg-neutral-50 rounded-xl border border-neutral-100">
+                      <MessageSquare className="w-6 h-6 mx-auto mb-2 opacity-40" />
+                      <p className="text-xs">No field updates yet for this task.</p>
+                      <p className="text-xs mt-0.5 opacity-70">Updates appear when the assigned worker submits from Field Operations.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {/* Evidence files — photos first */}
+                      {taskEvidence.length > 0 && (
+                        <div>
+                          {/* Photo grid */}
+                          {taskEvidence.filter(e => e.file_type?.startsWith('image/')).length > 0 && (
+                            <div className="grid grid-cols-3 gap-1.5 mb-2">
+                              {taskEvidence.filter(e => e.file_type?.startsWith('image/')).map(ev => (
+                                <a key={ev.id} href={ev.file_url} target="_blank" rel="noopener noreferrer"
+                                  className="aspect-square rounded-lg overflow-hidden border border-neutral-200 block group relative">
+                                  <img src={ev.file_url} alt={ev.file_name ?? 'evidence'} className="w-full h-full object-cover group-hover:opacity-90 transition-opacity" />
+                                </a>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Voice notes */}
+                          {taskEvidence.filter(e => e.file_type?.startsWith('audio/')).map(ev => (
+                            <div key={ev.id} className="flex items-center gap-2.5 p-2.5 bg-purple-50 border border-purple-100 rounded-lg">
+                              <Mic className="w-4 h-4 text-purple-500 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-purple-800 mb-1">Voice Note</p>
+                                <audio controls src={ev.file_url} className="w-full h-7" style={{ height: 28 }} />
+                              </div>
+                              <p className="text-[10px] text-purple-400 flex-shrink-0">
+                                {new Date(ev.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                              </p>
+                            </div>
+                          ))}
+
+                          {/* Other files */}
+                          {taskEvidence.filter(e => !e.file_type?.startsWith('image/') && !e.file_type?.startsWith('audio/')).map(ev => (
+                            <a key={ev.id} href={ev.file_url} target="_blank" rel="noopener noreferrer"
+                              className="flex items-center gap-2.5 p-2.5 bg-neutral-50 border border-neutral-200 rounded-lg hover:bg-neutral-100 transition-colors">
+                              <FileText className="w-4 h-4 text-neutral-500 flex-shrink-0" />
+                              <span className="text-xs text-neutral-700 truncate flex-1">{ev.file_name ?? 'File attachment'}</span>
+                              <span className="text-[10px] text-neutral-400 flex-shrink-0">
+                                {new Date(ev.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                              </span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Text notes feed */}
+                      {taskNotes.map(note => (
+                        <div key={note.id} className="flex gap-2.5">
+                          <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
+                            {note.worker_name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-baseline gap-2 mb-0.5">
+                              <span className="text-xs font-semibold text-neutral-800">{note.worker_name}</span>
+                              <span className="text-[10px] text-neutral-400">
+                                {new Date(note.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </span>
+                            </div>
+                            <p className="text-sm text-neutral-700 bg-blue-50 rounded-lg px-3 py-2 border border-blue-100 leading-relaxed whitespace-pre-wrap">{note.body}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Empty state when no task details at all */}
+                {!t.deliverables && !t.notes && !t.assigned_to_name && !t.due_date && !hasUpdates && !loadingTaskUpdates && (
+                  <p className="text-sm text-neutral-400 italic text-center py-2">No details recorded for this task.</p>
                 )}
               </div>
 
               {/* Footer actions */}
-              {t.status !== 'done' && t.status !== 'blocked' && (
-                <div className="px-5 pb-5 flex gap-2 border-t border-neutral-100 pt-4">
-                  {t.status === 'pending' && (
-                    <button onClick={() => { updateTaskStatus(t.id, 'in-progress'); setSelectedTask(prev => prev ? { ...prev, status: 'in-progress' } : null); }}
-                      className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium">
-                      Start Task
-                    </button>
-                  )}
-                  {t.status === 'in-progress' && (
-                    <button onClick={() => { updateTaskStatus(t.id, 'done'); setSelectedTask(null); }}
-                      className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors font-medium">
-                      Mark as Delivered
-                    </button>
-                  )}
-                  <button onClick={() => setSelectedTask(null)} className="px-4 py-2 border border-neutral-200 text-sm rounded-lg hover:bg-neutral-50 transition-colors text-neutral-600">
-                    Close
+              <div className="px-5 pb-5 border-t border-neutral-100 pt-4 flex gap-2 flex-shrink-0">
+                {t.status === 'pending' && (
+                  <button onClick={() => { updateTaskStatus(t.id, 'in-progress'); setSelectedTask(prev => prev ? { ...prev, status: 'in-progress' } : null); }}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                    Start Task
                   </button>
-                </div>
-              )}
-              {(t.status === 'done' || t.status === 'blocked') && (
-                <div className="px-5 pb-5 border-t border-neutral-100 pt-4">
-                  <button onClick={() => setSelectedTask(null)} className="px-4 py-2 border border-neutral-200 text-sm rounded-lg hover:bg-neutral-50 transition-colors text-neutral-600">
-                    Close
+                )}
+                {t.status === 'in-progress' && (
+                  <button onClick={() => { updateTaskStatus(t.id, 'done'); setSelectedTask(null); }}
+                    className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors font-medium">
+                    Mark as Delivered
                   </button>
-                </div>
-              )}
+                )}
+                <button onClick={() => setSelectedTask(null)} className="px-4 py-2 border border-neutral-200 text-sm rounded-lg hover:bg-neutral-50 transition-colors text-neutral-600">
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         );
