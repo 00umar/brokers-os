@@ -273,6 +273,7 @@ export function ProjectManagement() {
   const [collapsedPhases, setCollapsedPhases] = useState<Set<string>>(new Set());
   const [copiedClientLink, setCopiedClientLink] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
 
   const fetchProjects = useCallback(async () => {
     setLoadingProjects(true);
@@ -902,9 +903,9 @@ export function ProjectManagement() {
                                   ) : (
                                     <div className="space-y-2">
                                       {activeTasks.map(task => (
-                                        <div key={task.id} className={`flex items-start gap-2.5 p-2.5 rounded-lg ${
+                                        <div key={task.id} onClick={() => setSelectedTask(task)} className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer hover:shadow-sm transition-shadow ${
                                           task.status === 'blocked' ? 'bg-red-50 border border-red-100' :
-                                          task.status === 'in-progress' ? 'bg-blue-50/50' : 'bg-neutral-50'
+                                          task.status === 'in-progress' ? 'bg-blue-50/50 border border-blue-100' : 'bg-neutral-50 border border-neutral-100'
                                         }`}>
                                           <div className="flex-shrink-0 mt-0.5">
                                             {task.status === 'blocked' ? <Lock className="w-4 h-4 text-red-500" /> :
@@ -918,7 +919,7 @@ export function ProjectManagement() {
                                             {task.due_date && <p className="text-xs text-neutral-400 flex items-center gap-1 mt-0.5"><Calendar className="w-3 h-3" />{new Date(task.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</p>}
                                           </div>
                                           {task.status !== 'blocked' && (
-                                            <div className="flex flex-col gap-1 flex-shrink-0">
+                                            <div className="flex flex-col gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
                                               {task.status === 'in-progress' ? (
                                                 <button onClick={() => updateTaskStatus(task.id, 'done')}
                                                   className="px-2 py-0.5 text-xs bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors whitespace-nowrap">
@@ -1013,7 +1014,7 @@ export function ProjectManagement() {
                                   ) : (
                                     <div className="space-y-2">
                                       {doneTasks.map(task => (
-                                        <div key={task.id} className="flex items-start gap-2.5 p-2.5 bg-white rounded-lg border border-green-100">
+                                        <div key={task.id} onClick={() => setSelectedTask(task)} className="flex items-start gap-2.5 p-2.5 bg-white rounded-lg border border-green-100 cursor-pointer hover:shadow-sm transition-shadow">
                                           <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
                                           <div className="flex-1 min-w-0">
                                             <p className="text-sm font-medium text-neutral-600 line-through leading-snug">{task.name}</p>
@@ -1118,6 +1119,108 @@ export function ProjectManagement() {
           )}
         </div>
       )}
+
+      {/* ── Task Detail Modal ── */}
+      {selectedTask && (() => {
+        const t = selectedTask;
+        const priorityColors = { high: 'bg-red-100 text-red-700', medium: 'bg-amber-100 text-amber-700', low: 'bg-green-100 text-green-700' };
+        const statusLabels: Record<string, string> = { pending: 'Pending', 'in-progress': 'In Progress', done: 'Delivered', blocked: 'Blocked' };
+        const statusColors: Record<string, string> = { pending: 'bg-neutral-100 text-neutral-600', 'in-progress': 'bg-blue-100 text-blue-700', done: 'bg-green-100 text-green-700', blocked: 'bg-red-100 text-red-700' };
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-4" onClick={() => setSelectedTask(null)}>
+            <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-neutral-100 flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${statusColors[t.status]}`}>
+                      {statusLabels[t.status] ?? t.status}
+                    </span>
+                    {t.priority && (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${priorityColors[t.priority as 'high' | 'medium' | 'low'] ?? 'bg-neutral-100 text-neutral-600'}`}>
+                        {t.priority} priority
+                      </span>
+                    )}
+                  </div>
+                  <h3 className={`font-semibold text-neutral-900 text-base leading-snug ${t.status === 'done' ? 'line-through text-neutral-500' : ''}`}>{t.name}</h3>
+                </div>
+                <button onClick={() => setSelectedTask(null)} className="p-1.5 hover:bg-neutral-100 rounded-lg transition-colors flex-shrink-0">
+                  <X className="w-4 h-4 text-neutral-500" />
+                </button>
+              </div>
+
+              <div className="px-5 py-4 space-y-4">
+                {/* Meta row */}
+                <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                  {t.assigned_to_name && (
+                    <div>
+                      <p className="text-xs text-neutral-400 mb-0.5">Assigned To</p>
+                      <p className="font-medium text-neutral-800">{t.assigned_to_name}</p>
+                    </div>
+                  )}
+                  {t.due_date && (
+                    <div>
+                      <p className="text-xs text-neutral-400 mb-0.5">Due Date</p>
+                      <p className="font-medium text-neutral-800">{new Date(t.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Deliverables */}
+                {t.deliverables && (
+                  <div>
+                    <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                      <Award className="w-3 h-3" /> Deliverable
+                    </p>
+                    <p className="text-sm text-neutral-700 bg-neutral-50 rounded-lg px-3 py-2.5 border border-neutral-100 leading-relaxed">{t.deliverables}</p>
+                  </div>
+                )}
+
+                {/* Notes */}
+                {t.notes && (
+                  <div>
+                    <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1.5">Notes</p>
+                    <p className="text-sm text-neutral-700 bg-neutral-50 rounded-lg px-3 py-2.5 border border-neutral-100 leading-relaxed whitespace-pre-wrap">{t.notes}</p>
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {!t.deliverables && !t.notes && !t.assigned_to_name && !t.due_date && (
+                  <p className="text-sm text-neutral-400 italic text-center py-2">No additional details recorded for this task.</p>
+                )}
+              </div>
+
+              {/* Footer actions */}
+              {t.status !== 'done' && t.status !== 'blocked' && (
+                <div className="px-5 pb-5 flex gap-2 border-t border-neutral-100 pt-4">
+                  {t.status === 'pending' && (
+                    <button onClick={() => { updateTaskStatus(t.id, 'in-progress'); setSelectedTask(prev => prev ? { ...prev, status: 'in-progress' } : null); }}
+                      className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                      Start Task
+                    </button>
+                  )}
+                  {t.status === 'in-progress' && (
+                    <button onClick={() => { updateTaskStatus(t.id, 'done'); setSelectedTask(null); }}
+                      className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors font-medium">
+                      Mark as Delivered
+                    </button>
+                  )}
+                  <button onClick={() => setSelectedTask(null)} className="px-4 py-2 border border-neutral-200 text-sm rounded-lg hover:bg-neutral-50 transition-colors text-neutral-600">
+                    Close
+                  </button>
+                </div>
+              )}
+              {(t.status === 'done' || t.status === 'blocked') && (
+                <div className="px-5 pb-5 border-t border-neutral-100 pt-4">
+                  <button onClick={() => setSelectedTask(null)} className="px-4 py-2 border border-neutral-200 text-sm rounded-lg hover:bg-neutral-50 transition-colors text-neutral-600">
+                    Close
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── New Project Wizard ── */}
       {showNewProject && (
