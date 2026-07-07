@@ -17,6 +17,7 @@ import ClientDashboard from './components/ClientDashboard';
 import { TeamManagement } from './components/TeamManagement';
 import AcceptInvite from './components/AcceptInvite';
 import Signup from './components/Signup';
+import ProjectClientView from './components/ProjectClientView';
 
 // ── Staff protected routes ──────────────────────────────────────────────────
 function ProtectedRoutes() {
@@ -106,6 +107,7 @@ export default function App() {
           <Route path="/client/dashboard" element={<ClientPortalRoute />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/accept-invite" element={<AcceptInvite />} />
+          <Route path="/project/:id/client" element={<ProjectClientView />} />
           <Route path="/app/*" element={<ProtectedRoutes />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
