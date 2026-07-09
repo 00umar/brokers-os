@@ -171,6 +171,79 @@ WHERE email = 'abubakarumar040@gmail.com';
 
 
 -- ============================================================
+-- 11. SOCIAL_CONNECTIONS — OAuth tokens per company (Facebook + Instagram)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS social_connections (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  company_id uuid REFERENCES companies(id) ON DELETE CASCADE,
+  page_id text,
+  page_name text,
+  page_access_token text,
+  instagram_account_id text,
+  instagram_username text,
+  user_access_token text,
+  token_expires_at timestamptz,
+  connected_at timestamptz DEFAULT now(),
+  UNIQUE(company_id)
+);
+
+ALTER TABLE social_connections ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Auth full access" ON social_connections;
+CREATE POLICY "Auth full access" ON social_connections
+  FOR ALL USING (auth.role() = 'authenticated');
+
+
+-- ============================================================
+-- 12. SOCIAL_POSTS — Synced posts pulled from Facebook / Instagram
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS social_posts (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  company_id uuid REFERENCES companies(id) ON DELETE CASCADE,
+  platform text NOT NULL CHECK (platform IN ('facebook', 'instagram')),
+  external_id text NOT NULL,
+  caption text,
+  media_url text,
+  media_type text,
+  permalink text,
+  like_count integer DEFAULT 0,
+  comment_count integer DEFAULT 0,
+  posted_at timestamptz,
+  synced_at timestamptz DEFAULT now(),
+  UNIQUE(platform, external_id)
+);
+
+ALTER TABLE social_posts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Auth full access" ON social_posts;
+CREATE POLICY "Auth full access" ON social_posts
+  FOR ALL USING (auth.role() = 'authenticated');
+
+
+-- ============================================================
+-- 13. SOCIAL_LEADS — Leads auto-captured from comments & lead forms
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS social_leads (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  company_id uuid REFERENCES companies(id) ON DELETE CASCADE,
+  platform text NOT NULL CHECK (platform IN ('facebook', 'instagram')),
+  commenter_name text,
+  commenter_id text,
+  comment_text text,
+  post_caption text,
+  post_permalink text,
+  status text DEFAULT 'new' CHECK (status IN ('new', 'contacted', 'qualified', 'ignored')),
+  created_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE social_leads ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Auth full access" ON social_leads;
+CREATE POLICY "Auth full access" ON social_leads
+  FOR ALL USING (auth.role() = 'authenticated');
+
+
+-- ============================================================
 -- Done.
 -- After running: deploy the app so the new columns are live.
 -- ============================================================

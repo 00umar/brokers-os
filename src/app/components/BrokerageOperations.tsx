@@ -4,10 +4,12 @@ import {
   Send, Home, ShieldCheck, TrendingUp, Banknote, Loader2,
   CheckCircle2, Star, StarOff, Trash2, Edit3, Tag, BedDouble, Bath,
   ClipboardList, Check, MoreVertical, Upload, FileText, AlertTriangle, Printer,
+  RefreshCw, Instagram, Facebook, ExternalLink, Link2,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCompanySettings } from '../../hooks/useCompanySettings';
+import { useSocialFeed } from '../../hooks/useSocialFeed';
 import type { Client, Deal, BrokerNote, IntakeRequest, Listing, DealStage, SalesTask, OfferLetter } from '../../lib/database.types';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -43,13 +45,6 @@ const CLIENT_TYPE_COLOR: Record<string, string> = {
   investor: 'bg-purple-100 text-purple-700',
 };
 
-const SOCIAL_LEADS = [
-  { id: 'SL-001', platform: 'instagram', name: 'Chukwuemeka Obi',   property: 'Duplex — Lekki Phase 1',       interaction: 'DM inquiry via story ad',                  timestamp: '2 hours ago', status: 'new' },
-  { id: 'SL-002', platform: 'tiktok',    name: 'Fatima Abubakar',   property: 'Studio Apartment — Abuja',     interaction: 'Clicked link in bio + filled form',        timestamp: '5 hours ago', status: 'new' },
-  { id: 'SL-003', platform: 'instagram', name: 'Adewale Fashola',   property: '3-Bed Terrace — VGC',          interaction: 'Liked ad + sent DM',                       timestamp: '1 day ago',   status: 'contacted' },
-  { id: 'SL-004', platform: 'tiktok',    name: 'Ngozi Eze',         property: 'Investment Land — Epe',        interaction: 'Completed lead gen form on TikTok',        timestamp: '2 days ago',  status: 'qualified' },
-  { id: 'SL-005', platform: 'instagram', name: 'Bashir Mohammed',   property: 'Penthouse — Eko Atlantic',     interaction: 'Saved post + profile visit',               timestamp: '3 days ago',  status: 'new' },
-];
 
 const SOCIAL_STATUS_COLORS: Record<string, string> = {
   new: 'bg-gray-100 text-gray-700',
@@ -81,6 +76,7 @@ const emptyIntakeForm = {
 export function BrokerageOperations() {
   const { profile } = useAuth();
   const { settings: companySettings } = useCompanySettings();
+  const { connection: socialConnection, posts: socialPosts, leads: socialLeads, loading: socialLoading, syncing: socialSyncing, syncPosts, updateLeadStatus } = useSocialFeed();
   const [activeTab, setActiveTab] = useState<'pipeline' | 'intake' | 'clients' | 'listings' | 'social' | 'analytics'>('pipeline');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -149,7 +145,7 @@ export function BrokerageOperations() {
   const [intakeFilter, setIntakeFilter] = useState<'all' | 'new' | 'in-progress' | 'completed'>('all');
   const [convertingId, setConvertingId] = useState<string | null>(null);
 
-  // Social leads
+  const [socialSubTab, setSocialSubTab] = useState<'leads' | 'posts'>('leads');
   const [addedSocialLeadIds, setAddedSocialLeadIds] = useState<Set<string>>(new Set());
   const [addingSocialLeadId, setAddingSocialLeadId] = useState<string | null>(null);
 
@@ -197,22 +193,24 @@ export function BrokerageOperations() {
 
   // ── Social leads ──────────────────────────────────────────────────────────
 
-  async function addSocialToPipeline(lead: typeof SOCIAL_LEADS[0]) {
+  async function addSocialToPipeline(lead: { id: string; commenter_name: string | null; platform: string }) {
     setAddingSocialLeadId(lead.id);
+    const name = lead.commenter_name ?? 'Social Lead';
     const { data: client } = await supabase.from('clients').insert({
-      name: lead.name,
+      name,
       type: 'buyer' as const,
     }).select().single();
     if (client) {
       await supabase.from('deals').insert({
         client_id: client.id,
-        title: `${lead.name} — ${lead.platform === 'instagram' ? 'Instagram' : 'TikTok'} Lead`,
+        title: `${name} — ${lead.platform === 'instagram' ? 'Instagram' : 'Facebook'} Lead`,
         stage: 'new' as const,
         payment_status: 'pending' as const,
       });
       fetchClients();
       fetchDeals();
     }
+    await updateLeadStatus(lead.id, 'contacted');
     setAddedSocialLeadIds(prev => new Set([...prev, lead.id]));
     setAddingSocialLeadId(null);
   }
@@ -1244,91 +1242,240 @@ export function BrokerageOperations() {
         </div>
       )}
 
-      {/* ── Social Leads ──────────────────────────────────────────────────── */}
+      {/* ── Social Leads & Posts ──────────────────────────────────────────── */}
       {activeTab === 'social' && (
         <div className="space-y-4">
-          <div className="bg-pink-50 border border-pink-200 rounded-xl px-4 py-3 flex items-start gap-3">
-            <div className="w-5 h-5 rounded-full bg-pink-500 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-white text-xs font-bold">i</span>
+
+          {/* Connection status bar */}
+          <div className={`flex items-center justify-between px-4 py-3 rounded-xl border ${
+            socialConnection
+              ? 'bg-green-50 border-green-200'
+              : 'bg-amber-50 border-amber-200'
+          }`}>
+            <div className="flex items-center gap-3">
+              {socialConnection ? (
+                <>
+                  <Check className="w-4 h-4 text-green-600 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-green-900">
+                      {socialConnection.page_name}
+                      {socialConnection.instagram_username && ` · @${socialConnection.instagram_username}`}
+                    </p>
+                    <p className="text-xs text-green-700">Connected — posts and interested comments sync automatically</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Link2 className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-900">Not connected</p>
+                    <p className="text-xs text-amber-700">Go to Company Settings to connect Facebook & Instagram</p>
+                  </div>
+                </>
+              )}
             </div>
-            <p className="text-sm text-pink-800">
-              <span className="font-medium">Simulation mode.</span> These are mock leads from Instagram and TikTok campaigns. Click <span className="font-medium">Add to Pipeline</span> to create a client record and open a deal at stage <em>New</em>.
-            </p>
+            {socialConnection && (
+              <button
+                onClick={syncPosts}
+                disabled={socialSyncing}
+                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-green-200 text-green-700 rounded-lg text-xs font-medium hover:bg-green-50 transition-colors disabled:opacity-60"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${socialSyncing ? 'animate-spin' : ''}`} />
+                {socialSyncing ? 'Syncing…' : 'Sync now'}
+              </button>
+            )}
           </div>
 
-          <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[620px]">
-                <thead className="bg-neutral-50 border-b border-neutral-200">
-                  <tr>
-                    <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Platform</th>
-                    <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Name</th>
-                    <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Property Interest</th>
-                    <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Interaction</th>
-                    <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Status</th>
-                    <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100">
-                  {SOCIAL_LEADS.map(lead => {
-                    const isAdded = addedSocialLeadIds.has(lead.id);
-                    const isAdding = addingSocialLeadId === lead.id;
-                    return (
-                      <tr key={lead.id} className={`transition-colors ${isAdded ? 'bg-green-50/40' : 'hover:bg-neutral-50'}`}>
-                        <td className="px-5 py-4">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                            lead.platform === 'instagram' ? 'bg-pink-100 text-pink-700' : 'bg-neutral-900 text-white'
-                          }`}>
-                            {lead.platform === 'instagram' ? 'Instagram' : 'TikTok'}
-                          </span>
-                          <p className="text-xs text-neutral-400 mt-1">{lead.timestamp}</p>
-                        </td>
-                        <td className="px-5 py-4">
-                          <p className="text-sm font-medium text-neutral-900">{lead.name}</p>
-                        </td>
-                        <td className="px-5 py-4">
-                          <p className="text-sm text-neutral-700">{lead.property}</p>
-                        </td>
-                        <td className="px-5 py-4">
-                          <p className="text-xs text-neutral-500">{lead.interaction}</p>
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium capitalize ${SOCIAL_STATUS_COLORS[lead.status] ?? 'bg-gray-100 text-gray-700'}`}>
-                            {lead.status}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4">
-                          {isAdded ? (
-                            <div className="flex items-center gap-2">
-                              <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2.5 py-1 rounded-lg font-medium">
-                                <CheckCircle2 className="w-3 h-3" />
-                                Added
-                              </span>
-                              <button
-                                onClick={() => setActiveTab('pipeline')}
-                                className="text-xs text-blue-600 hover:text-blue-800 transition-colors"
-                              >
-                                View pipeline ↗
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => addSocialToPipeline(lead)}
-                              disabled={isAdding}
-                              className="text-xs px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-medium flex items-center gap-1.5 disabled:opacity-60"
-                            >
-                              {isAdding && <Loader2 className="w-3 h-3 animate-spin" />}
-                              Add to Pipeline
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+          {/* Sub-tabs: Leads | Posts */}
+          <div className="flex gap-1 bg-neutral-100 p-1 rounded-lg w-fit">
+            {(['leads', 'posts'] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setSocialSubTab(t)}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium capitalize transition-colors ${
+                  socialSubTab === t ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+                }`}
+              >
+                {t === 'leads' ? `Leads (${socialLeads.length})` : `Posts (${socialPosts.length})`}
+              </button>
+            ))}
           </div>
+
+          {/* ── Leads sub-tab ── */}
+          {socialSubTab === 'leads' && (
+            socialLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+              </div>
+            ) : socialLeads.length === 0 ? (
+              <div className="bg-white rounded-xl border border-neutral-200 p-12 text-center">
+                <div className="w-12 h-12 rounded-full bg-neutral-100 flex items-center justify-center mx-auto mb-3">
+                  <Instagram className="w-6 h-6 text-neutral-400" />
+                </div>
+                <p className="text-sm font-medium text-neutral-700 mb-1">No social leads yet</p>
+                <p className="text-xs text-neutral-500 max-w-xs mx-auto">
+                  When someone comments "interested", "price?", or fills a lead form on your posts, they'll appear here automatically.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[620px]">
+                    <thead className="bg-neutral-50 border-b border-neutral-200">
+                      <tr>
+                        <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Platform</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Name</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Comment</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Status</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100">
+                      {socialLeads.map(lead => {
+                        const isAdded = addedSocialLeadIds.has(lead.id);
+                        const isAdding = addingSocialLeadId === lead.id;
+                        return (
+                          <tr key={lead.id} className={`transition-colors ${isAdded ? 'bg-green-50/40' : 'hover:bg-neutral-50'}`}>
+                            <td className="px-5 py-4">
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                lead.platform === 'instagram' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'
+                              }`}>
+                                {lead.platform === 'instagram' ? (
+                                  <><Instagram className="w-3 h-3" /> Instagram</>
+                                ) : (
+                                  <><Facebook className="w-3 h-3" /> Facebook</>
+                                )}
+                              </span>
+                              <p className="text-xs text-neutral-400 mt-1">
+                                {new Date(lead.created_at).toLocaleDateString()}
+                              </p>
+                            </td>
+                            <td className="px-5 py-4">
+                              <p className="text-sm font-medium text-neutral-900">{lead.commenter_name ?? '—'}</p>
+                            </td>
+                            <td className="px-5 py-4 max-w-[200px]">
+                              <p className="text-xs text-neutral-600 line-clamp-2">{lead.comment_text}</p>
+                              {lead.post_permalink && (
+                                <a href={lead.post_permalink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-500 hover:underline mt-0.5">
+                                  View post <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                              )}
+                            </td>
+                            <td className="px-5 py-4">
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium capitalize ${SOCIAL_STATUS_COLORS[lead.status] ?? 'bg-gray-100 text-gray-700'}`}>
+                                {lead.status}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4">
+                              {isAdded || lead.status === 'contacted' || lead.status === 'qualified' ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2.5 py-1 rounded-lg font-medium">
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    In pipeline
+                                  </span>
+                                  <button
+                                    onClick={() => setActiveTab('pipeline')}
+                                    className="text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                                  >
+                                    View ↗
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => addSocialToPipeline(lead)}
+                                  disabled={isAdding}
+                                  className="text-xs px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-medium flex items-center gap-1.5 disabled:opacity-60"
+                                >
+                                  {isAdding && <Loader2 className="w-3 h-3 animate-spin" />}
+                                  Add to Pipeline
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          )}
+
+          {/* ── Posts sub-tab ── */}
+          {socialSubTab === 'posts' && (
+            socialLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+              </div>
+            ) : socialPosts.length === 0 ? (
+              <div className="bg-white rounded-xl border border-neutral-200 p-12 text-center">
+                <div className="w-12 h-12 rounded-full bg-neutral-100 flex items-center justify-center mx-auto mb-3">
+                  <RefreshCw className="w-6 h-6 text-neutral-400" />
+                </div>
+                <p className="text-sm font-medium text-neutral-700 mb-1">No posts synced yet</p>
+                <p className="text-xs text-neutral-500 mb-4">
+                  {socialConnection ? 'Click "Sync now" above to pull your latest Facebook & Instagram posts.' : 'Connect your accounts in Company Settings first.'}
+                </p>
+                {socialConnection && (
+                  <button
+                    onClick={syncPosts}
+                    disabled={socialSyncing}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${socialSyncing ? 'animate-spin' : ''}`} />
+                    Sync posts now
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {socialPosts.map(post => (
+                  <a
+                    key={post.id}
+                    href={post.permalink ?? '#'}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group bg-white rounded-xl border border-neutral-200 overflow-hidden hover:border-blue-300 hover:shadow-sm transition-all"
+                  >
+                    {post.media_url ? (
+                      <div className="aspect-square bg-neutral-100 overflow-hidden">
+                        <img
+                          src={post.media_url}
+                          alt={post.caption ?? 'Post'}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="aspect-square bg-neutral-100 flex items-center justify-center">
+                        <FileText className="w-8 h-8 text-neutral-300" />
+                      </div>
+                    )}
+                    <div className="p-3">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
+                          post.platform === 'instagram' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {post.platform === 'instagram' ? <Instagram className="w-2.5 h-2.5" /> : <Facebook className="w-2.5 h-2.5" />}
+                          {post.platform === 'instagram' ? 'Instagram' : 'Facebook'}
+                        </span>
+                      </div>
+                      {post.caption && (
+                        <p className="text-xs text-neutral-600 line-clamp-2">{post.caption}</p>
+                      )}
+                      <div className="flex items-center gap-3 mt-2 text-xs text-neutral-400">
+                        <span>♥ {post.like_count}</span>
+                        <span>💬 {post.comment_count}</span>
+                        {post.posted_at && (
+                          <span className="ml-auto">{new Date(post.posted_at).toLocaleDateString()}</span>
+                        )}
+                      </div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )
+          )}
         </div>
       )}
 
