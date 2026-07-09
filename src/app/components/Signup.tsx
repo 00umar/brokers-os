@@ -10,6 +10,7 @@ export default function Signup() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
 
   function makeSlug(name: string) {
     return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 50)
@@ -60,7 +61,31 @@ export default function Signup() {
     }
 
     setLoading(false)
+    if (!authData.session) {
+      setEmailSent(true)
+      return
+    }
     navigate('/app')
+  }
+
+  if (emailSent) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
+        <div className="w-full max-w-sm text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-600/20 mb-6">
+            <span className="text-3xl">📬</span>
+          </div>
+          <h1 className="text-white text-2xl font-semibold mb-2">Check your inbox</h1>
+          <p className="text-gray-400 text-sm">
+            We sent a confirmation link to <strong className="text-white">{email}</strong>.
+            Click it to activate your account, then sign in.
+          </p>
+          <Link to="/login" className="inline-block mt-6 text-blue-400 hover:text-blue-300 text-sm transition-colors">
+            Go to sign in →
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (

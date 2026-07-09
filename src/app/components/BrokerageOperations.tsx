@@ -199,6 +199,7 @@ export function BrokerageOperations() {
     const { data: client } = await supabase.from('clients').insert({
       name,
       type: 'buyer' as const,
+      company_id: profile?.company_id ?? undefined,
     }).select().single();
     if (client) {
       await supabase.from('deals').insert({
@@ -206,6 +207,7 @@ export function BrokerageOperations() {
         title: `${name} — ${lead.platform === 'instagram' ? 'Instagram' : 'Facebook'} Lead`,
         stage: 'new' as const,
         payment_status: 'pending' as const,
+        company_id: profile?.company_id ?? undefined,
       });
       fetchClients();
       fetchDeals();
@@ -393,6 +395,7 @@ export function BrokerageOperations() {
       phone: intake.contact_phone || undefined,
       company: intake.company || undefined,
       type: intake.client_type,
+      company_id: profile?.company_id ?? undefined,
     }).select().single();
     if (client) {
       await supabase.from('deals').insert({
@@ -402,6 +405,7 @@ export function BrokerageOperations() {
         property_type: intake.property_type || undefined,
         location: intake.location || undefined,
         payment_status: 'pending',
+        company_id: profile?.company_id ?? undefined,
       });
     }
     await supabase.from('intake_requests').update({ status: 'in-progress' }).eq('id', intake.id);
@@ -450,6 +454,7 @@ export function BrokerageOperations() {
       image_url: listingForm.image_url || undefined,
       is_featured: listingForm.is_featured,
       status: listingForm.status,
+      company_id: profile?.company_id ?? undefined,
     };
     if (editingListing) {
       await supabase.from('listings').update(payload).eq('id', editingListing.id);
@@ -502,6 +507,7 @@ export function BrokerageOperations() {
       email: newReq.contact_email || undefined,
       phone: newReq.contact_phone || undefined,
       type: newReq.client_type as 'buyer' | 'seller' | 'investor',
+      company_id: profile?.company_id ?? undefined,
     }).select().single();
     if (client) {
       await supabase.from('deals').insert({
@@ -511,6 +517,7 @@ export function BrokerageOperations() {
         property_type: newReq.property_category || undefined,
         location: newReq.location || undefined,
         payment_status: 'pending',
+        company_id: profile?.company_id ?? undefined,
       });
     }
     setSubmittingReq(false);
@@ -537,6 +544,7 @@ export function BrokerageOperations() {
       contact_email: intakeForm.contact_email || undefined,
       contact_phone: intakeForm.contact_phone || undefined,
       company: intakeForm.company || undefined,
+      company_id: profile?.company_id ?? undefined,
     });
     setIntakeSuccess(true);
     fetchIntakes();

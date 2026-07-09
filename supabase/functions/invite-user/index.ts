@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
     }
 
     const { data: callerProfile } = await supabaseAdmin
-      .from('profiles').select('role').eq('id', caller.id).single();
+      .from('profiles').select('role, company_id').eq('id', caller.id).single();
     if (callerProfile?.role !== 'admin') {
       return new Response(JSON.stringify({ error: 'Only admins can invite staff' }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -69,6 +69,7 @@ Deno.serve(async (req) => {
         email,
         role,
         status: 'active',
+        company_id: callerProfile?.company_id ?? null,
       }, { onConflict: 'id' });
     }
 

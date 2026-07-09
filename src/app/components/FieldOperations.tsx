@@ -216,7 +216,23 @@ export function FieldOperations() {
     const file = e.target.files?.[0];
     const taskId = activeUploadTaskId.current;
     if (!file || !taskId || !user) return;
-    await uploadEvidenceFile(taskId, file);
+
+    if (taskId.startsWith('report_')) {
+      const realTaskId = taskId.replace('report_', '');
+      setUploadingFor(taskId);
+      const path = `${user.id}/reports/${Date.now()}_${file.name}`;
+      const { error } = await supabase.storage.from('evidence').upload(path, file);
+      if (!error) {
+        const { data: { publicUrl } } = supabase.storage.from('evidence').getPublicUrl(path);
+        setReportEvidence(prev => ({
+          ...prev,
+          [realTaskId]: [...(prev[realTaskId] ?? []), publicUrl],
+        }));
+      }
+      setUploadingFor(null);
+    } else {
+      await uploadEvidenceFile(taskId, file);
+    }
     e.target.value = '';
   };
 
@@ -251,7 +267,11 @@ export function FieldOperations() {
     mediaRecorderRef.current?.stop();
   };
 
-  const removeEvidence = (taskId: string, idx: number) => {
+  const removeEvidence = async (taskId: string, idx: number) => {
+    const fileUrl = evidenceByTask[taskId]?.[idx]?.url;
+    if (fileUrl) {
+      await supabase.from('task_evidence').delete().eq('task_id', taskId).eq('file_url', fileUrl);
+    }
     setEvidenceByTask(prev => ({
       ...prev,
       [taskId]: prev[taskId].filter((_, i) => i !== idx),
