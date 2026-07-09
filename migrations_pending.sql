@@ -150,12 +150,28 @@ ALTER TABLE companies ADD COLUMN IF NOT EXISTS bank_sort_code text;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS facebook_page_id text;
 
 ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
+
+-- Super admins can do everything
 DROP POLICY IF EXISTS "Super admin full access" ON companies;
 CREATE POLICY "Super admin full access" ON companies
   FOR ALL USING (
     EXISTS (
       SELECT 1 FROM profiles
       WHERE id = auth.uid() AND is_super_admin = true
+    )
+  );
+
+-- Any authenticated user can create their own company (self-registration)
+DROP POLICY IF EXISTS "Authenticated users can create company" ON companies;
+CREATE POLICY "Authenticated users can create company" ON companies
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+-- Users can read and update their own company (the one linked to their profile)
+DROP POLICY IF EXISTS "Users can access own company" ON companies;
+CREATE POLICY "Users can access own company" ON companies
+  FOR ALL USING (
+    id IN (
+      SELECT company_id FROM profiles WHERE id = auth.uid()
     )
   );
 

@@ -53,7 +53,13 @@ export function useCompanySettings() {
       .insert({ name })
       .select('id, name, whatsapp_number, bank_name, bank_account_number, bank_sort_code, facebook_page_id, plan, status')
       .single();
-    if (data) setSettings(data as CompanySettings);
+    if (data) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('profiles').update({ company_id: data.id }).eq('id', user.id);
+      }
+      setSettings(data as CompanySettings);
+    }
     return { data, error };
   }
 
