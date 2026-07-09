@@ -13,6 +13,7 @@ import {
   Smartphone,
   LogOut,
   Settings,
+  SlidersHorizontal,
   X,
   Clock,
   ShieldAlert,
@@ -117,20 +118,36 @@ export function RootLayout() {
             </NavLink>
           ))}
           {profile?.role === 'admin' && (
-            <NavLink
-              to="/app/settings"
-              onClick={closeMobile}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
-                }`
-              }
-            >
-              <Settings className="w-5 h-5 flex-shrink-0" />
-              {!sidebarCollapsed && <span className="text-sm font-medium">Settings</span>}
-            </NavLink>
+            <>
+              <NavLink
+                to="/app/settings"
+                onClick={closeMobile}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+                    isActive
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                  }`
+                }
+              >
+                <Settings className="w-5 h-5 flex-shrink-0" />
+                {!sidebarCollapsed && <span className="text-sm font-medium">Team</span>}
+              </NavLink>
+              <NavLink
+                to="/app/company-settings"
+                onClick={closeMobile}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+                    isActive
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                  }`
+                }
+              >
+                <SlidersHorizontal className="w-5 h-5 flex-shrink-0" />
+                {!sidebarCollapsed && <span className="text-sm font-medium">Company</span>}
+              </NavLink>
+            </>
           )}
         </nav>
 

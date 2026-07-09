@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCompanySettings } from '../../hooks/useCompanySettings';
 import type { Client, Deal, BrokerNote, IntakeRequest, Listing, DealStage, SalesTask, OfferLetter } from '../../lib/database.types';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -79,6 +80,7 @@ const emptyIntakeForm = {
 
 export function BrokerageOperations() {
   const { profile } = useAuth();
+  const { settings: companySettings } = useCompanySettings();
   const [activeTab, setActiveTab] = useState<'pipeline' | 'intake' | 'clients' | 'listings' | 'social' | 'analytics'>('pipeline');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -657,9 +659,9 @@ export function BrokerageOperations() {
         <div className="bg-blue-50 rounded-lg p-4 space-y-1.5 text-xs border border-blue-200 font-sans">
           <p className="font-semibold text-blue-900 mb-2">Remit to:</p>
           <p><span className="font-semibold w-36 inline-block">Account Name:</span>765 Realty Limited</p>
-          <p><span className="font-semibold w-36 inline-block">Bank:</span>[Bank Name — update before sending]</p>
-          <p><span className="font-semibold w-36 inline-block">Account Number:</span>[Account Number]</p>
-          <p><span className="font-semibold w-36 inline-block">Sort Code:</span>[Sort Code]</p>
+          <p><span className="font-semibold w-36 inline-block">Bank:</span>{companySettings?.bank_name ?? <span className="text-red-500 italic">Not set — configure in Company Settings</span>}</p>
+          <p><span className="font-semibold w-36 inline-block">Account Number:</span>{companySettings?.bank_account_number ?? <span className="text-red-500 italic">Not set</span>}</p>
+          <p><span className="font-semibold w-36 inline-block">Sort Code:</span>{companySettings?.bank_sort_code ?? <span className="text-red-500 italic">Not set</span>}</p>
         </div>
         <ol className="list-decimal pl-5 space-y-2 text-xs font-sans">
           <li>Transfer the commission amount to the account details above.</li>

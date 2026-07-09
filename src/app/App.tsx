@@ -15,6 +15,7 @@ import Login from './components/Login';
 import ClientAuth from './components/ClientAuth';
 import ClientDashboard from './components/ClientDashboard';
 import { TeamManagement } from './components/TeamManagement';
+import { CompanySettings } from './components/CompanySettings';
 import AcceptInvite from './components/AcceptInvite';
 import Signup from './components/Signup';
 import ProjectClientView from './components/ProjectClientView';
@@ -48,6 +49,7 @@ function ProtectedRoutes() {
         <Route path="workforce" element={<WorkforceKPI />} />
         <Route path="field" element={<FieldOperations />} />
         <Route path="settings" element={<TeamManagement />} />
+        <Route path="company-settings" element={<CompanySettings />} />
       </Route>
     </Routes>
   );

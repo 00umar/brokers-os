@@ -23,10 +23,9 @@ import {
   LogOut,
 } from 'lucide-react';
 
-// Replace with your WhatsApp Business number (digits only, include country code, no +)
-const MANAGER_WHATSAPP = '2348000000000';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCompanySettings } from '../../hooks/useCompanySettings';
 import type { Task, TaskNote } from '../../lib/database.types';
 
 interface TaskWithRelations extends Task {
@@ -62,6 +61,8 @@ function getWeekInfo() {
 
 export function FieldOperations() {
   const { user, profile, signOut } = useAuth();
+  const { settings: companySettings } = useCompanySettings();
+  const MANAGER_WHATSAPP = companySettings?.whatsapp_number ?? '';
 
   const [activeTasks, setActiveTasks] = useState<TaskWithRelations[]>([]);
   const [completedTasks, setCompletedTasks] = useState<TaskWithRelations[]>([]);
@@ -354,11 +355,12 @@ export function FieldOperations() {
           </div>
           <div className="flex items-center gap-2">
             <a
-              href={`https://wa.me/${MANAGER_WHATSAPP}?text=${encodeURIComponent(`Hi, this is ${profile?.full_name ?? 'a field worker'} from site. I need to speak with the manager.`)}`}
+              href={MANAGER_WHATSAPP ? `https://wa.me/${MANAGER_WHATSAPP}?text=${encodeURIComponent(`Hi, this is ${profile?.full_name ?? 'a field worker'} from site. I need to speak with the manager.`)}` : '#'}
+              onClick={!MANAGER_WHATSAPP ? (e: React.MouseEvent) => e.preventDefault() : undefined}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-9 h-9 rounded-full bg-green-600 text-white flex items-center justify-center"
-              title="Contact Manager via WhatsApp"
+              className={`w-9 h-9 rounded-full text-white flex items-center justify-center ${MANAGER_WHATSAPP ? 'bg-green-600' : 'bg-neutral-300 cursor-not-allowed'}`}
+              title={MANAGER_WHATSAPP ? "Contact Manager via WhatsApp" : "WhatsApp number not configured — set it in Company Settings"}
             >
               <MessageCircle className="w-4 h-4" />
             </a>
@@ -871,10 +873,12 @@ export function FieldOperations() {
               <div>
                 <h3 className="font-medium text-neutral-900 mb-3">Task is Blocked</h3>
                 <a
-                  href={`https://wa.me/${MANAGER_WHATSAPP}?text=${encodeURIComponent(`Task BLOCKED: "${selectedTask.name}"${selectedTask.project?.name ? ` (${selectedTask.project.name})` : ''}. Please advise.`)}`}
+                  href={MANAGER_WHATSAPP ? `https://wa.me/${MANAGER_WHATSAPP}?text=${encodeURIComponent(`Task BLOCKED: "${selectedTask.name}"${selectedTask.project?.name ? ` (${selectedTask.project.name})` : ''}. Please advise.`)}` : '#'}
+                  onClick={!MANAGER_WHATSAPP ? (e: React.MouseEvent) => e.preventDefault() : undefined}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full p-4 bg-green-50 border-2 border-green-200 rounded-xl flex items-center gap-3 active:scale-[0.98] transition-transform"
+                  className={`w-full p-4 rounded-xl flex items-center gap-3 active:scale-[0.98] transition-transform ${MANAGER_WHATSAPP ? 'bg-green-50 border-2 border-green-200' : 'bg-neutral-50 border-2 border-neutral-200 opacity-50 cursor-not-allowed'}`}
+                  title={MANAGER_WHATSAPP ? undefined : "WhatsApp number not configured — set it in Company Settings"}
                 >
                   <MessageCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
                   <span className="font-medium text-green-900">Report Blocked via WhatsApp</span>
@@ -946,11 +950,11 @@ export function FieldOperations() {
                   Save Note
                 </button>
                 <a
-                  href={`https://wa.me/${MANAGER_WHATSAPP}?text=${encodeURIComponent(`Update on "${selectedTask.name}" (${selectedTask.project?.name ?? 'project'}): ${newNoteText}`)}`}
+                  href={MANAGER_WHATSAPP ? `https://wa.me/${MANAGER_WHATSAPP}?text=${encodeURIComponent(`Update on "${selectedTask.name}" (${selectedTask.project?.name ?? 'project'}): ${newNoteText}`)}` : '#'}
+                  onClick={(e) => { if (!MANAGER_WHATSAPP || !newNoteText.trim()) { e.preventDefault(); return; } addNote(selectedTask.id, newNoteText, 'whatsapp_log'); }}
                   target="_blank"
                   rel="noopener noreferrer"
-                  onClick={() => { if (newNoteText.trim()) { addNote(selectedTask.id, newNoteText, 'whatsapp_log'); } }}
-                  className={`px-4 py-2.5 bg-green-600 text-white text-sm font-medium rounded-xl flex items-center gap-2 active:scale-[0.98] transition-transform ${!newNoteText.trim() ? 'pointer-events-none opacity-40' : ''}`}
+                  className={`px-4 py-2.5 bg-green-600 text-white text-sm font-medium rounded-xl flex items-center gap-2 active:scale-[0.98] transition-transform ${(!newNoteText.trim() || !MANAGER_WHATSAPP) ? 'pointer-events-none opacity-40' : ''}`}
                 >
                   <MessageCircle className="w-4 h-4" />
                   Send to Manager

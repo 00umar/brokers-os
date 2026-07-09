@@ -464,26 +464,8 @@ export function ProjectManagement() {
       supabase.from('task_evidence').select('*').eq('task_id', task.id).order('created_at'),
       supabase.from('task_notes').select('*').eq('task_id', task.id).order('created_at'),
     ]);
-    const realEv = ev ?? [];
-    const realNotes = (notes ?? []) as TaskNote[];
-    // Mock data so the UI is visible before real uploads exist
-    if (realEv.length === 0 && realNotes.length === 0) {
-      const workerName = task.assigned_to_name ?? 'Field Worker';
-      const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
-      setTaskEvidence([
-        { id: 'mock-1', task_id: task.id, file_url: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=600&q=80', file_name: 'site_photo_1.jpg', file_type: 'image/jpeg', uploaded_by: workerName, created_at: ago(7200000) },
-        { id: 'mock-2', task_id: task.id, file_url: 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=600&q=80', file_name: 'site_photo_2.jpg', file_type: 'image/jpeg', uploaded_by: workerName, created_at: ago(3600000) },
-        { id: 'mock-3', task_id: task.id, file_url: '#', file_name: 'site_report.pdf', file_type: 'application/pdf', uploaded_by: workerName, created_at: ago(1800000) },
-      ] as TaskEvidence[]);
-      setTaskNotes([
-        { id: 'mock-n1', task_id: task.id, worker_id: 'mock', worker_name: workerName, note_type: 'text', body: 'Work started on site. Equipment and materials confirmed on ground. Team of 4 on deck.', created_at: ago(9000000) },
-        { id: 'mock-n2', task_id: task.id, worker_id: 'mock', worker_name: workerName, note_type: 'text', body: 'Foundation slab poured — east section complete. Concrete is curing. Photos attached.', created_at: ago(3600000) },
-        { id: 'mock-n3', task_id: task.id, worker_id: 'mock', worker_name: workerName, note_type: 'text', body: 'Checked curing progress — looking solid. Ready for supervisor inspection.', created_at: ago(1200000) },
-      ] as TaskNote[]);
-    } else {
-      setTaskEvidence(realEv);
-      setTaskNotes(realNotes);
-    }
+    setTaskEvidence(ev ?? []);
+    setTaskNotes((notes ?? []) as TaskNote[]);
     setLoadingTaskUpdates(false);
   };
 
