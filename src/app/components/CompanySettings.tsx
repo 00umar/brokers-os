@@ -10,7 +10,7 @@ import { useSocialFeed } from '../../hooks/useSocialFeed';
 const META_APP_ID = import.meta.env.VITE_META_APP_ID as string | undefined;
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const OAUTH_REDIRECT = `${SUPABASE_URL}/functions/v1/meta-oauth-callback`;
-const META_SCOPES = 'pages_show_list,pages_read_engagement,instagram_basic';
+const META_SCOPES = 'pages_show_list,pages_read_engagement';
 
 export function CompanySettings() {
   const { settings, loading, saving, save, createCompany } = useCompanySettings();
