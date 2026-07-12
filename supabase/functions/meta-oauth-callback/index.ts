@@ -3,7 +3,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const META_APP_ID = Deno.env.get('META_APP_ID') ?? '';
 const META_APP_SECRET = Deno.env.get('META_APP_SECRET') ?? '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const REDIRECT_URI = `${SUPABASE_URL}/functions/v1/meta-oauth-callback`;
 
 Deno.serve(async (req) => {
   const url = new URL(req.url);
@@ -11,7 +10,7 @@ Deno.serve(async (req) => {
   const stateRaw = url.searchParams.get('state');
   const oauthError = url.searchParams.get('error');
 
-  let stateData: { company_id: string; origin: string } | null = null;
+  let stateData: { company_id: string; origin: string; redirect_uri?: string } | null = null;
   try {
     stateData = JSON.parse(atob(stateRaw ?? ''));
   } catch {
@@ -25,6 +24,8 @@ Deno.serve(async (req) => {
       `${redirectBase}?meta=error&reason=${encodeURIComponent(oauthError ?? 'no_code')}`
     );
   }
+
+  const REDIRECT_URI = stateData.redirect_uri ?? `${SUPABASE_URL}/functions/v1/meta-oauth-callback`;
 
   try {
     // 1. Exchange code for short-lived user access token

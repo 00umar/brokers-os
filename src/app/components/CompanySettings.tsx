@@ -60,7 +60,7 @@ export function CompanySettings() {
       setError('No company record found. Create one first (run migrations, then refresh).');
       return;
     }
-    const state = btoa(JSON.stringify({ company_id: settings.id, origin: window.location.origin }));
+    const state = btoa(JSON.stringify({ company_id: settings.id, origin: window.location.origin, redirect_uri: OAUTH_REDIRECT }));
     const url = new URL('https://www.facebook.com/v19.0/dialog/oauth');
     url.searchParams.set('client_id', META_APP_ID);
     url.searchParams.set('redirect_uri', OAUTH_REDIRECT);
