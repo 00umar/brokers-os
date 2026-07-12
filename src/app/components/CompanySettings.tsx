@@ -1,16 +1,11 @@
 import { useState, useEffect } from 'react';
 import {
   MessageCircle, Banknote, Zap, Check, Loader2,
-  AlertCircle, Building2, Link2, Link2Off, Instagram, Facebook,
+  AlertCircle, Building2, Link2Off, Instagram, Facebook, Key, ExternalLink,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useCompanySettings } from '../../hooks/useCompanySettings';
 import { useSocialFeed } from '../../hooks/useSocialFeed';
-
-const META_APP_ID = import.meta.env.VITE_META_APP_ID as string | undefined;
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const OAUTH_REDIRECT = `${SUPABASE_URL}/functions/v1/meta-oauth-callback`;
-const META_SCOPES = 'pages_show_list,pages_read_engagement';
 
 export function CompanySettings() {
   const { settings, loading, saving, save, createCompany } = useCompanySettings();
@@ -26,6 +21,11 @@ export function CompanySettings() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
+  const [showTokenForm, setShowTokenForm] = useState(false);
+  const [pageToken, setPageToken] = useState('');
+  const [tokenConnecting, setTokenConnecting] = useState(false);
+  const [tokenError, setTokenError] = useState<string | null>(null);
+
   useEffect(() => {
     if (settings) {
       setCompanyName(settings.name ?? '');
@@ -36,38 +36,61 @@ export function CompanySettings() {
     }
   }, [settings]);
 
-  // Handle redirect back from Meta OAuth
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const meta = params.get('meta');
-    if (meta === 'connected') {
-      setSaved('social');
-      reloadSocial();
-      window.history.replaceState({}, '', window.location.pathname);
-    } else if (meta === 'error') {
-      const reason = params.get('reason') ?? 'Unknown error';
-      setError(`Facebook connection failed: ${reason}`);
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, [reloadSocial]);
+  async function connectWithToken() {
+    const token = pageToken.trim();
+    if (!token) { setTokenError('Paste your Page Access Token first.'); return; }
+    if (!settings?.id) { setTokenError('No company record found.'); return; }
 
-  function connectFacebook() {
-    if (!META_APP_ID) {
-      setError('VITE_META_APP_ID is not set. Add your Facebook App ID to .env.local and Vercel environment variables.');
-      return;
+    setTokenConnecting(true);
+    setTokenError(null);
+
+    try {
+      const pageRes = await fetch(
+        `https://graph.facebook.com/v19.0/me?fields=id,name&access_token=${encodeURIComponent(token)}`
+      );
+      const pageData = await pageRes.json();
+      if (pageData.error) throw new Error(pageData.error.message);
+
+      const pageId: string = pageData.id;
+      const pageName: string = pageData.name;
+
+      let igAccountId: string | null = null;
+      let igUsername: string | null = null;
+      try {
+        const igRes = await fetch(
+          `https://graph.facebook.com/v19.0/${pageId}?fields=instagram_business_account{id,username}&access_token=${encodeURIComponent(token)}`
+        );
+        const igData = await igRes.json();
+        igAccountId = igData.instagram_business_account?.id ?? null;
+        igUsername = igData.instagram_business_account?.username ?? null;
+      } catch { /* no Instagram linked — fine */ }
+
+      const { error: dbErr } = await supabase
+        .from('social_connections')
+        .upsert({
+          company_id: settings.id,
+          page_id: pageId,
+          page_name: pageName,
+          page_access_token: token,
+          instagram_account_id: igAccountId,
+          instagram_username: igUsername,
+          user_access_token: null,
+          token_expires_at: null,
+          connected_at: new Date().toISOString(),
+        }, { onConflict: 'company_id' });
+
+      if (dbErr) throw new Error(dbErr.message);
+
+      setPageToken('');
+      setShowTokenForm(false);
+      reloadSocial();
+      setSaved('social');
+      setTimeout(() => setSaved(null), 4000);
+    } catch (err) {
+      setTokenError(err instanceof Error ? err.message : 'Failed to connect. Check the token and try again.');
+    } finally {
+      setTokenConnecting(false);
     }
-    if (!settings?.id) {
-      setError('No company record found. Create one first (run migrations, then refresh).');
-      return;
-    }
-    const state = btoa(JSON.stringify({ company_id: settings.id, origin: window.location.origin, redirect_uri: OAUTH_REDIRECT }));
-    const url = new URL('https://www.facebook.com/v19.0/dialog/oauth');
-    url.searchParams.set('client_id', META_APP_ID);
-    url.searchParams.set('redirect_uri', OAUTH_REDIRECT);
-    url.searchParams.set('scope', META_SCOPES);
-    url.searchParams.set('response_type', 'code');
-    url.searchParams.set('state', state);
-    window.location.href = url.toString();
   }
 
   async function disconnectSocial() {
@@ -267,7 +290,7 @@ export function CompanySettings() {
           </div>
         </div>
 
-        {connection ? (
+        {connection && !showTokenForm ? (
           /* ── Connected state ── */
           <div className="space-y-3">
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-3">
@@ -312,11 +335,11 @@ export function CompanySettings() {
             </div>
             <div className="flex gap-3">
               <button
-                onClick={connectFacebook}
+                onClick={() => { setShowTokenForm(true); setTokenError(null); setPageToken(''); }}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors"
               >
-                <Link2 className="w-4 h-4" />
-                Reconnect / Switch account
+                <Key className="w-4 h-4" />
+                Update token
               </button>
               <button
                 onClick={disconnectSocial}
@@ -328,47 +351,55 @@ export function CompanySettings() {
             </div>
           </div>
         ) : (
-          /* ── Not connected state ── */
+          /* ── Token form ── */
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-3">
-              <div className="flex items-start gap-3 bg-neutral-50 rounded-lg p-3">
-                <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">1</div>
-                <div>
-                  <p className="text-sm font-medium text-neutral-900">Click Connect below</p>
-                  <p className="text-xs text-neutral-500">You'll be taken to Facebook to log in</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 bg-neutral-50 rounded-lg p-3">
-                <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">2</div>
-                <div>
-                  <p className="text-sm font-medium text-neutral-900">Select your Business Page</p>
-                  <p className="text-xs text-neutral-500">If you have an Instagram Business account linked to that Page, it connects automatically too</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 bg-neutral-50 rounded-lg p-3">
-                <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">3</div>
-                <div>
-                  <p className="text-sm font-medium text-neutral-900">Click Approve</p>
-                  <p className="text-xs text-neutral-500">You'll be brought straight back here — your posts and leads will appear in Brokerage → Social</p>
-                </div>
-              </div>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+              <p className="text-xs font-semibold text-blue-900 uppercase tracking-wide">How to get your Page Access Token</p>
+              <ol className="text-xs text-blue-800 space-y-1.5 list-decimal list-inside">
+                <li>Open <a href="https://developers.facebook.com/tools/explorer" target="_blank" rel="noreferrer" className="underline font-medium inline-flex items-center gap-0.5">Graph API Explorer <ExternalLink className="w-3 h-3" /></a></li>
+                <li>Select your <strong>Business app</strong> from the top-right dropdown</li>
+                <li>Click <strong>Generate Access Token</strong> → tick <code className="bg-blue-100 px-1 rounded">pages_show_list</code> → generate</li>
+                <li>In the query field type <code className="bg-blue-100 px-1 rounded">/me/accounts</code> and click <strong>Submit</strong></li>
+                <li>Copy the <code className="bg-blue-100 px-1 rounded">access_token</code> from your Page in the results</li>
+                <li>Paste it below</li>
+              </ol>
             </div>
 
-            {!META_APP_ID && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <p className="text-xs text-amber-800">
-                  <strong>Developer setup needed:</strong> Add <code className="bg-amber-100 px-1 rounded">VITE_META_APP_ID</code> to your <code className="bg-amber-100 px-1 rounded">.env.local</code> and Vercel environment variables.
+            <div className="space-y-2">
+              <label className="block text-xs font-medium text-neutral-700">Page Access Token</label>
+              <textarea
+                value={pageToken}
+                onChange={e => setPageToken(e.target.value)}
+                placeholder="EAAxxxxxxx..."
+                rows={3}
+                className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              />
+              {tokenError && (
+                <p className="text-xs text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                  {tokenError}
                 </p>
-              </div>
-            )}
+              )}
+            </div>
 
-            <button
-              onClick={connectFacebook}
-              className="w-full flex items-center justify-center gap-3 py-3 bg-[#1877F2] text-white rounded-lg text-sm font-semibold hover:bg-[#166FE5] transition-colors"
-            >
-              <Facebook className="w-5 h-5" />
-              Connect Facebook & Instagram
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={connectWithToken}
+                disabled={tokenConnecting || !pageToken.trim()}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {tokenConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
+                {tokenConnecting ? 'Connecting…' : 'Connect'}
+              </button>
+              {connection && (
+                <button
+                  onClick={() => { setShowTokenForm(false); setTokenError(null); setPageToken(''); }}
+                  className="px-4 py-2 text-sm text-neutral-600 hover:text-neutral-900 transition-colors"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
           </div>
         )}
 
