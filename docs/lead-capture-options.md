@@ -22,7 +22,19 @@ Open-source "ManyChat alternatives" on GitHub (OpenReply, InstaAuto, Pilot) **do
 - **Start now:** Meta Business Verification (the business is fully registered), then App Review for the comment/message permissions and Tech Provider status for WhatsApp (B). The pilot gives us the working demo Meta asks for in review.
 - After about 2 weeks of the pilot, measure roughly what share of each broker's enquiries were captured.
 
+## WhatsApp without our own Meta review (researched 2026-11-21)
+| Option | How | Hurdle | Risk / cost |
+|---|---|---|---|
+| **W1. Unofficial "WhatsApp Web" link** (Baileys, whatsapp-web.js) | Broker scans a QR code, like WhatsApp Web. Brokers OS reads every chat. | None | **Breaks WhatsApp's terms. The broker's number can be banned, even if we only read messages.** Fake copies of these libraries have stolen accounts. **Rejected.** |
+| **W2. Go through 360dialog** (already Meta-approved) with coexistence | Broker keeps the WhatsApp Business app, and messages are copied to Brokers OS automatically | Their onboarding, not ours. **Still to confirm with 360dialog whether we also need Tech Provider status.** | About €25–49 per number per month (figures vary), plus Meta fees. Messages sent from the app stay free. |
+| **W3. "Forward to Brokers OS" number** | Brokers OS has **its own** WhatsApp number on the Cloud API. The broker forwards a customer's message or shares the contact card to it, and the lead is created with name and number. | **None.** Our own number only needs our own app (the existing `whatsapp-webhook` fits this). | Free to receive. The broker taps "forward" per lead, which takes about 3 seconds. |
+
+**Plan:** W3 for the pilot (safe, works now). Ask 360dialog about W2 for fully automatic capture. Keep our own Tech Provider application as the long-term route.
+
 ## Sources
+- 360dialog coexistence: https://docs.360dialog.com/docs/hub/embedded-signup/whatsapp-coexistence
+- 360dialog pricing: https://docs.360dialog.com/partner/get-started/pricing-and-plans
+- Unofficial library ban risk: https://whatsapp.checkleaked.cc/blog/best-open-source-whatsapp-libraries
 - Instagram App Review / Advanced Access: https://developers.facebook.com/docs/instagram-platform/app-review
 - Instagram comment moderation & webhooks: https://developers.facebook.com/docs/instagram-platform/comment-moderation
 - WhatsApp Tech Provider onboarding: https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-customers-as-a-tech-provider
