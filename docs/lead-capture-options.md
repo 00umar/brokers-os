@@ -29,7 +29,7 @@ Open-source "ManyChat alternatives" on GitHub (OpenReply, InstaAuto, Pilot) **do
 | **W2. Go through 360dialog** (already Meta-approved) with coexistence | Broker keeps the WhatsApp Business app, and messages are copied to Brokers OS automatically | Their onboarding, not ours. **Still to confirm with 360dialog whether we also need Tech Provider status.** | About €25–49 per number per month (figures vary), plus Meta fees. Messages sent from the app stay free. |
 | **W3. "Forward to Brokers OS" number** | Brokers OS has **its own** WhatsApp number on the Cloud API. The broker forwards a customer's message or shares the contact card to it, and the lead is created with name and number. | **None.** Our own number only needs our own app (the existing `whatsapp-webhook` fits this). | Free to receive. The broker taps "forward" per lead, which takes about 3 seconds. |
 
-**Plan:** W3 for the pilot (safe, works now). Ask 360dialog about W2 for fully automatic capture. Keep our own Tech Provider application as the long-term route.
+**Plan (updated after owner feedback):** W3 is safe but **too much work for brokers** to rely on (one forward per lead). It is optional only, for customers who go straight to WhatsApp. The pilot relies on **automatic Instagram/Facebook comment and DM capture** (brokers as testers), which catches most leads before they move to WhatsApp. **The owner is contacting 360dialog about W2** (the key question: can we onboard brokers' numbers without becoming a Tech Provider ourselves?). Our own Tech Provider application stays as the fallback.
 
 ## Sources
 - 360dialog coexistence: https://docs.360dialog.com/docs/hub/embedded-signup/whatsapp-coexistence
