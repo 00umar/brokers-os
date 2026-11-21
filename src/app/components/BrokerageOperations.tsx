@@ -76,6 +76,11 @@ const emptyIntakeForm = {
 export function BrokerageOperations() {
   const { profile } = useAuth();
   const { settings: companySettings } = useCompanySettings();
+  // Company identity used on letters, captions and references (set in Company Settings)
+  const coName = companySettings?.name?.trim() || 'Your Company';
+  const coEmail = companySettings?.email?.trim() || '';
+  const coRefPrefix = coName.split(/\s+/)[0].replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase() || 'REF';
+  const coHashtag = coName.replace(/[^A-Za-z0-9]/g, '');
   const { connection: socialConnection, posts: socialPosts, leads: socialLeads, loading: socialLoading, syncing: socialSyncing, syncPosts, updateLeadStatus } = useSocialFeed();
   const [activeTab, setActiveTab] = useState<'pipeline' | 'intake' | 'clients' | 'listings' | 'social' | 'analytics'>('pipeline');
   const [searchQuery, setSearchQuery] = useState('');
@@ -511,7 +516,7 @@ export function BrokerageOperations() {
     lines.push('📲 Interested? Send us a message — we respond immediately!', '');
     const locationTag = listing.location.split(',')[0].trim().replace(/\s+/g, '');
     const typeTag = (listing.property_type ?? 'Property').replace(/[\s/]+/g, '');
-    lines.push(`#765Realty #LagosRealEstate #${typeTag} #${locationTag}`);
+    lines.push(`${coHashtag ? `#${coHashtag} ` : ''}#RealEstate #${typeTag} #${locationTag}`);
     return lines.join('\n');
   }
 
@@ -585,7 +590,7 @@ export function BrokerageOperations() {
 
   function renderLetterBody(letter: OfferLetter, deal: Deal, clientName: string) {
     const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    const ref = `765-${deal.id.slice(0, 8).toUpperCase()}`;
+    const ref = `${coRefPrefix}-${deal.id.slice(0, 8).toUpperCase()}`;
     const budgetStr = deal.budget_min || deal.budget_max
       ? [
           deal.budget_min ? `₦${(deal.budget_min / 1_000_000).toFixed(1)}M` : '',
@@ -599,7 +604,7 @@ export function BrokerageOperations() {
       return (
         <div className="space-y-5 text-sm text-neutral-800 leading-relaxed font-serif">
           <div className="text-center pb-5 border-b-2 border-neutral-800">
-            <h2 className="text-2xl font-bold uppercase tracking-widest font-sans">765 Realty</h2>
+            <h2 className="text-2xl font-bold uppercase tracking-widest font-sans">{coName}</h2>
             <p className="text-xs text-neutral-500 mt-1 font-sans">Professional Real Estate Services</p>
           </div>
           <div className="text-center">
@@ -611,7 +616,7 @@ export function BrokerageOperations() {
           </div>
           <p>To: <strong>{clientName}</strong> ({partyLabel})</p>
           <p>
-            This Agreement is entered into between <strong>765 Realty</strong> ("the Agent") and{' '}
+            This Agreement is entered into between <strong>{coName}</strong> ("the Agent") and{' '}
             <strong>{clientName}</strong> ("the Principal") in respect of the transaction described below.
           </p>
           <div className="bg-neutral-50 rounded-lg p-4 space-y-1.5 text-xs font-sans border border-neutral-200">
@@ -623,10 +628,10 @@ export function BrokerageOperations() {
           </div>
           <p className="font-bold uppercase text-xs tracking-wide font-sans">Terms and Conditions</p>
           <ol className="list-decimal pl-5 space-y-2 text-xs font-sans">
-            <li><strong>Mandate:</strong> The Principal hereby grants 765 Realty the exclusive authority to act as Agent in facilitating the {actionLabel} of the above-referenced property.</li>
-            <li><strong>Commission:</strong> The Principal agrees to pay 765 Realty a professional service commission of <strong>5% (five percent)</strong> of the final agreed transaction value upon successful completion of the transaction.</li>
+            <li><strong>Mandate:</strong> The Principal hereby grants {coName} the exclusive authority to act as Agent in facilitating the {actionLabel} of the above-referenced property.</li>
+            <li><strong>Commission:</strong> The Principal agrees to pay {coName} a professional service commission of <strong>5% (five percent)</strong> of the final agreed transaction value upon successful completion of the transaction.</li>
             <li><strong>Scope of Services:</strong> This commission covers all professional services rendered including property sourcing/marketing, client negotiations, due diligence coordination, and transaction management.</li>
-            <li><strong>Payment Terms:</strong> Commission shall be remitted to 765 Realty on or before the date of signing of the final Agreement of Sale / Deed of Assignment / Transfer of Title.</li>
+            <li><strong>Payment Terms:</strong> Commission shall be remitted to {coName} on or before the date of signing of the final Agreement of Sale / Deed of Assignment / Transfer of Title.</li>
             <li><strong>Exclusivity:</strong> The Principal agrees not to engage any other agent for this specific transaction while this agreement remains in effect.</li>
             <li><strong>Validity:</strong> This agreement remains valid until the transaction is completed or either party provides 30 days' written notice of termination.</li>
           </ol>
@@ -644,7 +649,7 @@ export function BrokerageOperations() {
               </div>
             </div>
             <div className="space-y-4">
-              <p className="text-xs font-bold uppercase text-neutral-500 font-sans">For 765 Realty</p>
+              <p className="text-xs font-bold uppercase text-neutral-500 font-sans">For {coName}</p>
               <div className="space-y-2 text-xs font-sans">
                 <p>Name: __________________________</p>
                 <div className="border-b border-neutral-400 mt-6 mb-1" />
@@ -654,7 +659,7 @@ export function BrokerageOperations() {
             </div>
           </div>
           <p className="text-xs text-center text-neutral-400 pt-4 border-t border-neutral-200 font-sans">
-            765 Realty · Professional Real Estate Services · operations@765realty.com
+            {coName} · Professional Real Estate Services{coEmail ? ` · ${coEmail}` : ''}
           </p>
         </div>
       );
@@ -664,7 +669,7 @@ export function BrokerageOperations() {
     return (
       <div className="space-y-5 text-sm text-neutral-800 leading-relaxed font-serif">
         <div className="text-center pb-5 border-b-2 border-neutral-800">
-          <h2 className="text-2xl font-bold uppercase tracking-widest font-sans">765 Realty</h2>
+          <h2 className="text-2xl font-bold uppercase tracking-widest font-sans">{coName}</h2>
           <p className="text-xs text-neutral-500 mt-1 font-sans">Professional Real Estate Services</p>
         </div>
         <div className="text-center">
@@ -688,16 +693,16 @@ export function BrokerageOperations() {
         <p className="font-bold uppercase text-xs tracking-wide font-sans">Commission Payment Details</p>
         <div className="bg-blue-50 rounded-lg p-4 space-y-1.5 text-xs border border-blue-200 font-sans">
           <p className="font-semibold text-blue-900 mb-2">Remit to:</p>
-          <p><span className="font-semibold w-36 inline-block">Account Name:</span>765 Realty Limited</p>
+          <p><span className="font-semibold w-36 inline-block">Account Name:</span>{coName}</p>
           <p><span className="font-semibold w-36 inline-block">Bank:</span>{companySettings?.bank_name ?? <span className="text-red-500 italic">Not set — configure in Company Settings</span>}</p>
           <p><span className="font-semibold w-36 inline-block">Account Number:</span>{companySettings?.bank_account_number ?? <span className="text-red-500 italic">Not set</span>}</p>
           <p><span className="font-semibold w-36 inline-block">Sort Code:</span>{companySettings?.bank_sort_code ?? <span className="text-red-500 italic">Not set</span>}</p>
         </div>
         <ol className="list-decimal pl-5 space-y-2 text-xs font-sans">
           <li>Transfer the commission amount to the account details above.</li>
-          <li>Upon transfer, send proof of payment to: <strong>operations@765realty.com</strong></li>
+          <li>Upon transfer, send proof of payment to: {coEmail ? <strong>{coEmail}</strong> : <span className="text-red-500 italic">email not set — configure in Company Settings</span>}</li>
           <li>This instruction must be completed within <strong>48 hours</strong> of deal closure confirmation.</li>
-          <li>Title transfer and all further facilitation by 765 Realty will only proceed upon confirmation of cleared funds.</li>
+          <li>Title transfer and all further facilitation by {coName} will only proceed upon confirmation of cleared funds.</li>
         </ol>
         <p className="text-xs text-neutral-600 italic font-sans">
           By signing below, I acknowledge receipt of this settlement instruction and confirm my commitment to remit the professional fee as outlined above.
@@ -713,7 +718,7 @@ export function BrokerageOperations() {
             </div>
           </div>
           <div className="space-y-4">
-            <p className="text-xs font-bold uppercase text-neutral-500 font-sans">For 765 Realty</p>
+            <p className="text-xs font-bold uppercase text-neutral-500 font-sans">For {coName}</p>
             <div className="space-y-2 text-xs font-sans">
               <p>Name: __________________________</p>
               <div className="border-b border-neutral-400 mt-6 mb-1" />
@@ -723,7 +728,7 @@ export function BrokerageOperations() {
           </div>
         </div>
         <p className="text-xs text-center text-neutral-400 pt-4 border-t border-neutral-200 font-sans">
-          765 Realty · Professional Real Estate Services · operations@765realty.com
+          {coName} · Professional Real Estate Services{coEmail ? ` · ${coEmail}` : ''}
         </p>
       </div>
     );

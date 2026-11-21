@@ -33,7 +33,7 @@ The first company using it is **765 Realty** (Lagos). The platform is multi-tena
 | Workforce KPI | `/app/workforce` | Staff performance, weekly reports, approve/reject, worker responses |
 | Field Operations | `/app/field` | Mobile view for field workers: tasks, photo/voice evidence, weekly report, report blocked tasks via WhatsApp |
 | Team Management | `/app/settings` | Invite staff, change roles, set which modules managers can access |
-| Company Settings | `/app/company-settings` | Company name, bank details, WhatsApp, Facebook/Instagram and WhatsApp lead-capture connections |
+| Company Settings | `/app/company-settings` | Company name and contact email, bank details, WhatsApp, Facebook/Instagram and WhatsApp lead-capture connections |
 
 ### Roles
 - **admin**: full access
@@ -111,9 +111,9 @@ Secrets to set in **Supabase → Edge Functions → Secrets**:
 | `SITE_URL` | invite links, OAuth redirect (e.g. `https://765-crm.vercel.app`) |
 | `META_APP_ID`, `META_APP_SECRET` | Facebook/Instagram connection |
 | `META_WEBHOOK_VERIFY_TOKEN` | `meta-webhook` (default `crm765_webhook_verify`) |
-| `WHATSAPP_VERIFY_TOKEN` | `whatsapp-webhook` (default `765crm-webhook-v1`) |
+| `WHATSAPP_VERIFY_TOKEN` | `whatsapp-webhook` (default `brokersos-webhook-v1`) |
 
-The default verify tokens still contain the old "765" naming on purpose. They must match exactly what is entered in the Meta developer dashboard, so renaming them would break a webhook that is already connected.
+The Meta (Facebook/Instagram) verify token still contains the old "765" naming on purpose. It must match exactly what is entered in the Meta developer dashboard, so renaming it would break the webhook that is already connected.
 
 ---
 
@@ -133,10 +133,10 @@ The default verify tokens still contain the old "765" naming on purpose. They mu
 ## 7. Known open items
 
 - [ ] **WhatsApp lead capture:** run `whatsapp_migration.sql`, deploy `whatsapp-webhook`, configure it in Meta, test.
-- [ ] **Field Operations manager number:** `MANAGER_WHATSAPP` in `FieldOperations.tsx` is a placeholder (`2348000000000`).
-- [ ] **"765 Realty" is hard-coded** in client-facing screens and documents: offer letters, payment instructions, client portal, intake form, listings header, WhatsApp message text. Because the app is multi-tenant, every other company would see 765 Realty's name. These should read the company name and bank details from Company Settings.
+- [ ] **Fill in Company Settings:** company name, contact email, WhatsApp manager number and bank details. Offer letters, payment instructions, the client portal, field worker WhatsApp buttons and staff messages all read from here. Anything not filled in shows "Not set" or a neutral placeholder.
+- [ ] **Public pages are shared by all companies.** `/listings` and `/intake` show every company's listings, and intake requests don't record which company they are for, so these pages carry Brokers OS branding. The proper fix is a public link per company (e.g. `/c/765-realty/listings`).
 - [ ] **Confirm which migrations have run** on the live database.
-- [ ] **Hosting names:** the Vercel URL (`765-crm`) and GitHub repo (`765-crm`) still use the old name. Renaming either changes its links, so leave them until a custom domain is set up.
+- [ ] **Hosting names:** the Vercel URL (`765-crm.vercel.app`) and GitHub repo (`765-crm`) still use the old name. Both can be renamed. When the web address changes, the new address must also be updated in Supabase (Auth → URL Configuration, and the `SITE_URL` secret) and in the Meta app's OAuth redirect URIs, or login and the Facebook connection will break.
 
 ---
 

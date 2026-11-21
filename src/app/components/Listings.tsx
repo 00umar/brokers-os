@@ -58,9 +58,9 @@ export function Listings() {
         </Link>
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-md bg-blue-600 flex items-center justify-center">
-            <span className="text-white font-bold text-sm leading-none">7</span>
+            <span className="text-white font-bold text-sm leading-none">B</span>
           </div>
-          <span className="text-white text-sm font-medium hidden sm:block">765 Realty</span>
+          <span className="text-white text-sm font-medium hidden sm:block">Brokers OS</span>
         </div>
         <Link
           to="/intake"

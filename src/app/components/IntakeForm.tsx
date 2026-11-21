@@ -117,7 +117,7 @@ export function IntakeForm() {
           <h2 className="text-2xl font-bold text-white mb-3">Request Received</h2>
           <p className="text-gray-400 mb-2 leading-relaxed">
             Thank you, <span className="text-white">{form.contact_name}</span>. Your intake request has been submitted
-            to the 765 Realty team.
+            to our team.
           </p>
           <p className="text-gray-500 text-sm mb-8">
             One of our advisors will reach out within 24 hours on your preferred contact.
@@ -176,9 +176,9 @@ export function IntakeForm() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-md bg-blue-600 flex items-center justify-center">
-              <span className="text-white font-bold text-sm leading-none">7</span>
+              <span className="text-white font-bold text-sm leading-none">B</span>
             </div>
-            <span className="text-white text-sm font-medium">765 Realty</span>
+            <span className="text-white text-sm font-medium">Brokers OS</span>
           </div>
           {!user && (
             <Link
@@ -223,7 +223,7 @@ export function IntakeForm() {
             {/* Step 1 */}
             {step === 1 && (
               <div>
-                <h1 className="text-2xl font-bold text-white mb-2">What brings you to 765 Realty?</h1>
+                <h1 className="text-2xl font-bold text-white mb-2">What can we help you with?</h1>
                 <p className="text-gray-400 mb-8">Select what best describes your situation.</p>
                 <div className="space-y-3 mb-8">
                   {clientTypes.map((t) => (
@@ -417,7 +417,7 @@ export function IntakeForm() {
                 <span className="inline-flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-medium px-2.5 py-1 rounded-full">
                   Hot Listings
                 </span>
-                <p className="text-gray-500 text-xs mt-2">Properties currently available through 765 Realty</p>
+                <p className="text-gray-500 text-xs mt-2">Properties currently available</p>
               </div>
 
               {!listingsLoaded ? (

@@ -143,6 +143,7 @@ CREATE TABLE IF NOT EXISTS companies (
 );
 
 -- If companies table already existed, add the new settings columns
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS email text;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS whatsapp_number text;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS bank_name text;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS bank_account_number text;

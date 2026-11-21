@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCompanySettings } from '../../hooks/useCompanySettings';
 import type { Profile, WeeklyReport, ReportTaskItem, Task } from '../../lib/database.types';
 
 type ReportWithItems = WeeklyReport & { items?: ReportTaskItem[] };
@@ -50,6 +51,8 @@ const REPORT_STATUS_COLORS: Record<string, string> = {
 export function WorkforceKPI() {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { settings: companySettings } = useCompanySettings();
+  const teamLabel = companySettings?.name?.trim() ? `the ${companySettings.name.trim()} management team` : 'the management team';
   const isAdmin = profile?.role === 'admin' || profile?.role === 'manager';
 
   const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'staff'>('overview');
@@ -757,7 +760,7 @@ export function WorkforceKPI() {
                               )}
                               {p.phone && (
                                 <a
-                                  href={`https://wa.me/${p.phone.replace(/\D/g, '')}?text=Hi ${encodeURIComponent(p.full_name)}, this is the 765 Realty management team.`}
+                                  href={`https://wa.me/${p.phone.replace(/\D/g, '')}?text=Hi ${encodeURIComponent(p.full_name)}, this is ${teamLabel}.`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 transition-colors w-fit"
@@ -910,7 +913,7 @@ export function WorkforceKPI() {
                     )}
                     {emp.phone && (
                       <a
-                        href={`https://wa.me/${emp.phone.replace(/\D/g, '')}?text=Hi ${encodeURIComponent(emp.full_name)}, this is the 765 Realty management team.`}
+                        href={`https://wa.me/${emp.phone.replace(/\D/g, '')}?text=Hi ${encodeURIComponent(emp.full_name)}, this is ${teamLabel}.`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 transition-colors w-fit"

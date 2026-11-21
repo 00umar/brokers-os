@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 export interface CompanySettings {
   id: string;
   name: string;
+  email: string | null;
   whatsapp_number: string | null;
   bank_name: string | null;
   bank_account_number: string | null;
@@ -20,12 +21,20 @@ export function useCompanySettings() {
 
   const load = useCallback(async () => {
     try {
-      const { data } = await supabase
+      let { data, error } = await supabase
         .from('companies')
-        .select('id, name, whatsapp_number, bank_name, bank_account_number, bank_sort_code, facebook_page_id, plan, status')
+        .select('id, name, email, whatsapp_number, bank_name, bank_account_number, bank_sort_code, facebook_page_id, plan, status')
         .limit(1)
         .maybeSingle();
-      setSettings(data as CompanySettings | null);
+      if (error) {
+        // `email` column may not exist yet on older databases — load without it
+        ({ data } = await supabase
+          .from('companies')
+          .select('id, name, whatsapp_number, bank_name, bank_account_number, bank_sort_code, facebook_page_id, plan, status')
+          .limit(1)
+          .maybeSingle());
+      }
+      setSettings(data ? ({ email: null, ...data } as CompanySettings) : null);
     } catch {
       // companies table may not exist until migrations are run
     } finally {
@@ -51,7 +60,7 @@ export function useCompanySettings() {
     const { data, error } = await supabase
       .from('companies')
       .insert({ name })
-      .select('id, name, whatsapp_number, bank_name, bank_account_number, bank_sort_code, facebook_page_id, plan, status')
+      .select('id, name, email, whatsapp_number, bank_name, bank_account_number, bank_sort_code, facebook_page_id, plan, status')
       .single();
     if (data) {
       const { data: { user } } = await supabase.auth.getUser();

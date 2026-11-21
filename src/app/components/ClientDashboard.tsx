@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { useCompanySettings } from '../../hooks/useCompanySettings';
 import type { IntakeRequest, Listing } from '../../lib/database.types';
 import {
   Building2,
@@ -18,7 +19,7 @@ import {
   Tag,
 } from 'lucide-react';
 
-const WA_NUMBER = '234XXXXXXXXXX'; // TODO: replace with actual WhatsApp business number
+
 
 const statusConfig: Record<
   string,
@@ -32,6 +33,9 @@ const statusConfig: Record<
 
 export default function ClientDashboard() {
   const { user, profile, signOut } = useAuth();
+  const { settings: companySettings } = useCompanySettings();
+  const coName = companySettings?.name?.trim() || 'Brokers OS';
+  const WA_NUMBER = companySettings?.whatsapp_number ?? '';
   const navigate = useNavigate();
   const [inquiries, setInquiries] = useState<IntakeRequest[]>([]);
   const [listings, setListings] = useState<Listing[]>([]);
@@ -80,9 +84,9 @@ export default function ClientDashboard() {
       <nav className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-md bg-blue-600 flex items-center justify-center">
-            <span className="text-white font-bold text-sm leading-none">7</span>
+            <span className="text-white font-bold text-sm leading-none">{coName.charAt(0).toUpperCase()}</span>
           </div>
-          <span className="font-semibold text-white text-sm hidden sm:block">765 Realty</span>
+          <span className="font-semibold text-white text-sm hidden sm:block">{coName}</span>
         </Link>
         <div className="flex items-center gap-4">
           {profile?.full_name && (
@@ -104,7 +108,7 @@ export default function ClientDashboard() {
         {/* Welcome */}
         <div className="mb-10">
           <h1 className="text-2xl font-bold text-white mb-1">Welcome back, {firstName}!</h1>
-          <p className="text-gray-400 text-sm">Here's your 765 Realty client portal.</p>
+          <p className="text-gray-400 text-sm">Here's your {coName} client portal.</p>
         </div>
 
         {loading ? (
@@ -259,7 +263,7 @@ export default function ClientDashboard() {
                 </p>
               </div>
               <a
-                href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent("Hello, I'm a 765 Realty client and I need assistance.")}`}
+                href={WA_NUMBER ? `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Hello, I'm a ${coName} client and I need assistance.`)}` : '#'}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-shrink-0 flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"

@@ -12,6 +12,7 @@ export function CompanySettings() {
   const { connection, reload: reloadSocial } = useSocialFeed();
 
   const [companyName, setCompanyName] = useState('');
+  const [companyEmail, setCompanyEmail] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [bankName, setBankName] = useState('');
   const [bankAccount, setBankAccount] = useState('');
@@ -39,6 +40,7 @@ export function CompanySettings() {
   useEffect(() => {
     if (settings) {
       setCompanyName(settings.name ?? '');
+      setCompanyEmail(settings.email ?? '');
       setWhatsapp(settings.whatsapp_number ?? '');
       setBankName(settings.bank_name ?? '');
       setBankAccount(settings.bank_account_number ?? '');
@@ -207,7 +209,7 @@ export function CompanySettings() {
           <input
             value={companyName}
             onChange={e => setCompanyName(e.target.value)}
-            placeholder="e.g. 765 Realty Limited"
+            placeholder="e.g. Acme Realty Limited"
             className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <button
@@ -239,6 +241,50 @@ export function CompanySettings() {
           {error}
         </div>
       )}
+
+      {/* ── Company Profile ── */}
+      <section className="bg-white border border-neutral-200 rounded-xl p-5 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-neutral-100 flex items-center justify-center flex-shrink-0">
+            <Building2 className="w-5 h-5 text-neutral-700" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-neutral-900">Company Profile</h2>
+            <p className="text-xs text-neutral-500">Shown on offer letters, payment instructions, the client portal and messages to staff</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-neutral-700">Company name</label>
+            <input
+              value={companyName}
+              onChange={e => setCompanyName(e.target.value)}
+              placeholder="e.g. Acme Realty Limited"
+              className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-neutral-700">Contact email <span className="text-neutral-400">(clients send proof of payment here)</span></label>
+            <input
+              type="email"
+              value={companyEmail}
+              onChange={e => setCompanyEmail(e.target.value.trim())}
+              placeholder="e.g. operations@yourcompany.com"
+              className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={() => handleSave('profile', { name: companyName.trim() || settings.name, email: companyEmail })}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved === 'profile' ? <Check className="w-4 h-4" /> : null}
+          {saved === 'profile' ? 'Saved' : 'Save'}
+        </button>
+      </section>
 
       {/* ── WhatsApp ── */}
       <section className="bg-white border border-neutral-200 rounded-xl p-5 space-y-4">
@@ -397,10 +443,10 @@ export function CompanySettings() {
                   <p className="text-xs text-neutral-500 mb-1">Verify Token</p>
                   <div className="flex gap-2 items-center">
                     <code className="flex-1 text-xs bg-white border border-neutral-200 rounded px-2 py-1.5 text-neutral-700 font-mono">
-                      765crm-webhook-v1
+                      brokersos-webhook-v1
                     </code>
                     <button
-                      onClick={() => copyText('765crm-webhook-v1', 'verify')}
+                      onClick={() => copyText('brokersos-webhook-v1', 'verify')}
                       className="px-3 py-1.5 border border-neutral-200 rounded bg-white hover:bg-neutral-50 text-xs text-neutral-600 transition-colors flex-shrink-0 font-medium"
                     >
                       {waCopied === 'verify' ? '✓ Copied' : 'Copy'}
