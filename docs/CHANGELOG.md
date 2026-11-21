@@ -4,6 +4,9 @@ A dated record of what changed and why. Newest entries are at the top. Every cha
 
 ---
 
+## 2026-11-21 (business update)
+- 765 Realty is no longer a client. The next step is to onboard about 2 brokers as the first real users, have them use Brokers OS end to end, and market it after that.
+
 ## 2026-11-21 (database outage)
 - **Nobody could log in.** The cause was the Supabase project (`imgyzcbqoaolrvowdngp`) being paused for inactivity on the free plan, which made its address stop existing. The owner restored it from the Supabase dashboard. Login and data access were confirmed working again the same day.
 - To prevent it: keep the app in regular use, or move to the Supabase Pro plan, which never pauses.

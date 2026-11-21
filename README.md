@@ -2,7 +2,7 @@
 
 An operations system for real estate brokerages and property/construction teams. Brokers OS is **not** a property marketplace. It is the internal tool a brokerage uses to run deals, projects, field staff and client requests in one place.
 
-The first company using it is **765 Realty** (Lagos). The platform is multi-tenant: each company that signs up has its own separate data.
+It was originally built with 765 Realty (Lagos), which is no longer a client (as of 2026-11-21). The platform is multi-tenant: each company that signs up has its own separate data.
 
 - **Live app:** https://brokers-os-app.vercel.app (old address https://765-crm.vercel.app is kept working during the switch)
 - **Code:** https://github.com/00umar/brokers-os (renamed from `765-crm`; GitHub forwards the old link)
