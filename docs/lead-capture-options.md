@@ -16,9 +16,10 @@ A customer sees a post or reel, then comments ("price pls"), sends a DM, or taps
 
 Open-source "ManyChat alternatives" on GitHub (OpenReply, InstaAuto, Pilot) **do not avoid Meta review**. They run on your own Meta app keys, so the same review applies. They are also young projects (under ~7 months old). They're only useful as code reference.
 
-## Recommendation
-- **Pilot:** A + D (no approval needed). Use C for the pilot brokers as app testers if useful.
-- **Start now, in parallel:** Meta Business Verification for Brokers OS, since B needs it. B is the long-term answer.
+## Recommendation (updated 2026-11-21, after owner feedback)
+- **D is dropped as a lead channel.** Customers stay on Instagram/Facebook and won't visit a Brokers OS page. Capture has to happen in comments, DMs and WhatsApp.
+- **Pilot: C, with the pilot brokers added as testers on our Meta app.** This needs no review and is free. Comment *notifications* need full approval, so new comments are checked every few minutes instead. Fall back to A (ManyChat) only if the tester route doesn't work.
+- **Start now:** Meta Business Verification (the business is fully registered), then App Review for the comment/message permissions and Tech Provider status for WhatsApp (B). The pilot gives us the working demo Meta asks for in review.
 - After about 2 weeks of the pilot, measure roughly what share of each broker's enquiries were captured.
 
 ## Sources
