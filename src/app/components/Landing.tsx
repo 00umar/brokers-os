@@ -82,7 +82,7 @@ export function Landing() {
             <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
               <span className="text-white font-bold text-sm">B</span>
             </div>
-            <span className="font-semibold text-white text-base">BrokerOS</span>
+            <span className="font-semibold text-white text-base">Brokers OS</span>
           </div>
           <div className="flex items-center gap-3">
             <Link
@@ -177,7 +177,7 @@ export function Landing() {
             <div>
               <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">Built for teams who move fast</h2>
               <p className="text-gray-400 mb-8 leading-relaxed">
-                BrokerOS is designed for real estate agencies, brokerages, and property development firms that need structure — without the enterprise software price tag.
+                Brokers OS is designed for real estate agencies, brokerages, and property development firms that need structure — without the enterprise software price tag.
               </p>
               <Link
                 to="/signup"
@@ -244,7 +244,7 @@ export function Landing() {
             <div className="w-6 h-6 rounded-md bg-blue-600 flex items-center justify-center">
               <span className="text-white font-bold text-xs">B</span>
             </div>
-            <span className="text-gray-400 text-sm">BrokerOS © {new Date().getFullYear()}</span>
+            <span className="text-gray-400 text-sm">Brokers OS © {new Date().getFullYear()}</span>
           </div>
           <div className="flex items-center gap-6">
             <Link to="/login" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">Sign in</Link>

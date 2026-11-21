@@ -1,5 +1,5 @@
 -- ============================================================
--- 765 CRM - Supabase Database Schema
+-- Brokers OS - Supabase Database Schema
 -- Run this in Supabase → SQL Editor → New query
 -- ============================================================
 

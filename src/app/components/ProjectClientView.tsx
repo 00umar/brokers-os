@@ -63,7 +63,7 @@ export default function ProjectClientView() {
         <div className="max-w-3xl mx-auto px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-sm font-bold">B</div>
-            <span className="font-semibold text-sm">BrokerOS</span>
+            <span className="font-semibold text-sm">Brokers OS</span>
           </div>
           <span className="text-xs text-neutral-400">Project Progress Report</span>
         </div>
@@ -199,7 +199,7 @@ export default function ProjectClientView() {
         {/* Footer */}
         <div className="text-center pt-4 pb-8">
           <p className="text-xs text-neutral-400">
-            Powered by <span className="font-semibold text-neutral-600">BrokerOS</span> · Project progress as of {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+            Powered by <span className="font-semibold text-neutral-600">Brokers OS</span> · Project progress as of {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
       </div>

@@ -1,5 +1,5 @@
 -- ============================================================
--- 765 CRM – Mock Workforce Seed Data
+-- Brokers OS – Mock Workforce Seed Data
 -- Paste into Supabase SQL Editor and click Run.
 -- Workers can log in with:  email below / password: Worker@2025
 -- ============================================================

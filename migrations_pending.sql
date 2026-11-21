@@ -1,5 +1,5 @@
 -- ============================================================
--- 765 CRM — Pending Migrations
+-- Brokers OS — Pending Migrations
 -- Run ALL of these in Supabase → SQL Editor → New query
 -- Safe to run multiple times (uses IF NOT EXISTS / IF NOT EXISTS checks)
 -- ============================================================

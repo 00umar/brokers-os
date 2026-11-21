@@ -78,7 +78,7 @@ export function RootLayout() {
           {!sidebarCollapsed && (
             <Link to="/" onClick={closeMobile} className="flex items-center gap-2 hover:opacity-75 transition-opacity min-w-0">
               <Building2 className="w-6 h-6 text-blue-600 flex-shrink-0" />
-              <span className="font-semibold text-neutral-900 truncate">BrokerOS</span>
+              <span className="font-semibold text-neutral-900 truncate">Brokers OS</span>
             </Link>
           )}
           {/* Desktop collapse toggle */}
@@ -197,7 +197,7 @@ export function RootLayout() {
           </div>
 
           {/* App name on mobile */}
-          <span className="md:hidden text-sm font-semibold text-neutral-900 truncate flex-1">BrokerOS</span>
+          <span className="md:hidden text-sm font-semibold text-neutral-900 truncate flex-1">Brokers OS</span>
 
           <div className="flex items-center gap-2 flex-shrink-0">
             <button className="relative p-2 hover:bg-neutral-100 rounded-lg transition-colors">
