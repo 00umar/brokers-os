@@ -6,7 +6,7 @@ A dated record of what changed and why. Newest entries are at the top. Every cha
 
 ## 2026-11-21 (hosting rename)
 - **GitHub repo renamed** from `00umar/765-crm` to `00umar/brokers-os`. GitHub forwards the old URL, and the local git remote has been updated.
-- **Web address moving to `brokers-os.vercel.app`.** This has to be done in the Vercel dashboard (see the README open items for the full checklist, including the Supabase and Meta settings). No code changes were needed, because the app never hard-codes its own address.
+- **New web address: https://brokers-os-app.vercel.app**, added to the Vercel project `765-crm` and confirmed live. `brokers-os.vercel.app` and `brokersos.vercel.app` were already owned by other Vercel accounts. The old `765-crm.vercel.app` still works. Supabase and Meta still need updating (see the README open items). No code changes were needed, because the app never hard-codes its own address.
 
 ## 2026-11-21 (later)
 - **Removed the hard-coded "765 Realty" from the app.** Each company's own details now come from Company Settings:

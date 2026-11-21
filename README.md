@@ -4,7 +4,7 @@ An operations system for real estate brokerages and property/construction teams.
 
 The first company using it is **765 Realty** (Lagos). The platform is multi-tenant: each company that signs up has its own separate data.
 
-- **Live app:** https://brokers-os.vercel.app (old address https://765-crm.vercel.app is kept working during the switch)
+- **Live app:** https://brokers-os-app.vercel.app (old address https://765-crm.vercel.app is kept working during the switch)
 - **Code:** https://github.com/00umar/brokers-os (renamed from `765-crm`; GitHub forwards the old link)
 - **Change history:** [docs/CHANGELOG.md](docs/CHANGELOG.md). Every change gets logged there.
 
@@ -108,7 +108,7 @@ Secrets to set in **Supabase → Edge Functions → Secrets**:
 | Name | Used by |
 |---|---|
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | all functions (Supabase usually provides these automatically) |
-| `SITE_URL` | invite links, OAuth redirect (`https://brokers-os.vercel.app`) |
+| `SITE_URL` | invite links, OAuth redirect (`https://brokers-os-app.vercel.app`) |
 | `META_APP_ID`, `META_APP_SECRET` | Facebook/Instagram connection |
 | `META_WEBHOOK_VERIFY_TOKEN` | `meta-webhook` (default `crm765_webhook_verify`) |
 | `WHATSAPP_VERIFY_TOKEN` | `whatsapp-webhook` (default `brokersos-webhook-v1`) |
@@ -136,10 +136,10 @@ The Meta (Facebook/Instagram) verify token still contains the old "765" naming o
 - [ ] **Fill in Company Settings:** company name, contact email, WhatsApp manager number and bank details. Offer letters, payment instructions, the client portal, field worker WhatsApp buttons and staff messages all read from here. Anything not filled in shows "Not set" or a neutral placeholder.
 - [ ] **Public pages are shared by all companies.** `/listings` and `/intake` show every company's listings, and intake requests don't record which company they are for, so these pages carry Brokers OS branding. The proper fix is a public link per company (e.g. `/c/765-realty/listings`).
 - [ ] **Confirm which migrations have run** on the live database.
-- [ ] **Finish the move to `brokers-os.vercel.app`:**
-  1. Vercel → project → Settings → Domains → add `brokers-os.vercel.app`, and keep `765-crm.vercel.app` for now.
-  2. Supabase → Authentication → URL Configuration → set Site URL to `https://brokers-os.vercel.app`, and add `https://brokers-os.vercel.app/**` to Redirect URLs.
-  3. Supabase → Edge Functions → Secrets → set `SITE_URL` to `https://brokers-os.vercel.app`.
+- [ ] **Finish the move to `brokers-os-app.vercel.app`:**
+  1. ~~Vercel: add `brokers-os-app.vercel.app`~~ Done 2026-11-21. (`brokers-os.vercel.app` and `brokersos.vercel.app` were already taken by other people.) `765-crm.vercel.app` still works.
+  2. Supabase → Authentication → URL Configuration → set Site URL to `https://brokers-os-app.vercel.app`, and add `https://brokers-os-app.vercel.app/**` to Redirect URLs.
+  3. Supabase → Edge Functions → Secrets → set `SITE_URL` to `https://brokers-os-app.vercel.app`.
   4. Meta developer app → Facebook Login → Valid OAuth Redirect URIs → add the new address.
   5. Test login, staff invite and the Facebook connection on the new address. Then remove the old one if you want.
 
