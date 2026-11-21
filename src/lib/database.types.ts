@@ -191,6 +191,30 @@ export interface OfferLetter {
   created_at: string
 }
 
+export interface WhatsAppConnection {
+  id: string
+  company_id: string
+  phone_number_id: string
+  display_phone_number: string | null
+  waba_id: string | null
+  connected_at: string
+  last_message_at: string | null
+  created_at: string
+}
+
+export interface WhatsAppLead {
+  id: string
+  company_id: string
+  sender_phone: string
+  sender_name: string | null
+  message_text: string | null
+  whatsapp_message_id: string | null
+  client_id: string | null
+  deal_id: string | null
+  received_at: string | null
+  created_at: string
+}
+
 export interface Lead {
   id: string
   name: string
@@ -238,6 +262,8 @@ export interface Database {
       offer_letters: { Row: OfferLetter; Insert: Omit<OfferLetter, 'id' | 'created_at'>; Update: Partial<OfferLetter> }
       leads: { Row: Lead; Insert: Omit<Lead, 'id' | 'created_at'>; Update: Partial<Lead> }
       sales_tasks: { Row: SalesTask; Insert: Omit<SalesTask, 'id' | 'created_at'>; Update: Partial<SalesTask> }
+      whatsapp_connections: { Row: WhatsAppConnection; Insert: Omit<WhatsAppConnection, 'id' | 'created_at'>; Update: Partial<WhatsAppConnection> }
+      whatsapp_leads: { Row: WhatsAppLead; Insert: Omit<WhatsAppLead, 'id' | 'created_at'>; Update: Partial<WhatsAppLead> }
     }
   }
 }

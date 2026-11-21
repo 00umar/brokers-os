@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   MessageCircle, Banknote, Zap, Check, Loader2,
-  AlertCircle, Building2, Link2Off, Instagram, Facebook, Key, ExternalLink,
+  AlertCircle, Building2, Link2Off, Instagram, Facebook, Key, ExternalLink, Wifi,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useCompanySettings } from '../../hooks/useCompanySettings';
@@ -26,6 +26,16 @@ export function CompanySettings() {
   const [tokenConnecting, setTokenConnecting] = useState(false);
   const [tokenError, setTokenError] = useState<string | null>(null);
 
+  // WhatsApp Lead Capture
+  const [waConn, setWaConn] = useState<{ phone_number_id: string; display_phone_number: string | null; last_message_at: string | null } | null>(null);
+  const [waLoading, setWaLoading] = useState(false);
+  const [waPhoneNumberId, setWaPhoneNumberId] = useState('');
+  const [waDisplayPhone, setWaDisplayPhone] = useState('');
+  const [waSaving, setWaSaving] = useState(false);
+  const [waError, setWaError] = useState<string | null>(null);
+  const [waSaved, setWaSaved] = useState(false);
+  const [waCopied, setWaCopied] = useState<string | null>(null);
+
   useEffect(() => {
     if (settings) {
       setCompanyName(settings.name ?? '');
@@ -35,6 +45,52 @@ export function CompanySettings() {
       setBankSort(settings.bank_sort_code ?? '');
     }
   }, [settings]);
+
+  useEffect(() => {
+    if (!settings?.id) return;
+    setWaLoading(true);
+    supabase
+      .from('whatsapp_connections')
+      .select('phone_number_id, display_phone_number, last_message_at')
+      .eq('company_id', settings.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        setWaConn(data ?? null);
+        if (data) {
+          setWaPhoneNumberId(data.phone_number_id);
+          setWaDisplayPhone(data.display_phone_number ?? '');
+        }
+        setWaLoading(false);
+      });
+  }, [settings?.id]);
+
+  async function saveWaConnection() {
+    if (!settings?.id || !waPhoneNumberId.trim()) return;
+    setWaSaving(true);
+    setWaError(null);
+    const { error } = await supabase
+      .from('whatsapp_connections')
+      .upsert({
+        company_id: settings.id,
+        phone_number_id: waPhoneNumberId.trim(),
+        display_phone_number: waDisplayPhone.trim() || null,
+        connected_at: new Date().toISOString(),
+      }, { onConflict: 'company_id' });
+    if (error) {
+      setWaError(error.message);
+    } else {
+      setWaConn({ phone_number_id: waPhoneNumberId.trim(), display_phone_number: waDisplayPhone.trim() || null, last_message_at: waConn?.last_message_at ?? null });
+      setWaSaved(true);
+      setTimeout(() => setWaSaved(false), 3000);
+    }
+    setWaSaving(false);
+  }
+
+  async function copyText(text: string, key: string) {
+    await navigator.clipboard.writeText(text);
+    setWaCopied(key);
+    setTimeout(() => setWaCopied(null), 2000);
+  }
 
   async function connectWithToken() {
     const token = pageToken.trim();
@@ -274,6 +330,131 @@ export function CompanySettings() {
             {saved === 'bank' ? 'Saved' : 'Save bank details'}
           </button>
         </div>
+      </section>
+
+      {/* ── WhatsApp Lead Capture ── */}
+      <section className="bg-white border border-neutral-200 rounded-xl p-5 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+            <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current text-green-600" aria-hidden="true">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-neutral-900">WhatsApp Lead Capture</h2>
+            <p className="text-xs text-neutral-500">
+              When someone messages your WhatsApp Business number, their details go straight into the pipeline
+            </p>
+          </div>
+        </div>
+
+        {waLoading ? (
+          <div className="flex items-center justify-center h-10">
+            <Loader2 className="w-4 h-4 animate-spin text-neutral-400" />
+          </div>
+        ) : (
+          <>
+            {/* Connection status */}
+            {waConn ? (
+              <div className="flex items-center gap-2.5 px-3 py-2.5 bg-green-50 border border-green-200 rounded-lg">
+                <Wifi className="w-4 h-4 text-green-600 flex-shrink-0" />
+                <div className="text-xs text-green-800 flex-1 min-w-0">
+                  <span className="font-semibold">Active</span>
+                  {waConn.display_phone_number && <span className="ml-1 text-green-700">· {waConn.display_phone_number}</span>}
+                  {waConn.last_message_at && (
+                    <span className="text-green-600 ml-1">
+                      · Last lead received {new Date(waConn.last_message_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2.5 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <p className="text-xs text-amber-800">Not configured — enter your Phone Number ID below to activate</p>
+              </div>
+            )}
+
+            {/* Technical details for developer setup */}
+            <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-4 space-y-3">
+              <p className="text-xs font-semibold text-neutral-600 uppercase tracking-wide">Developer setup — give these to your CRM developer</p>
+              <div className="space-y-2.5">
+                <div>
+                  <p className="text-xs text-neutral-500 mb-1">Webhook URL</p>
+                  <div className="flex gap-2 items-center">
+                    <code className="flex-1 text-xs bg-white border border-neutral-200 rounded px-2 py-1.5 text-neutral-700 font-mono truncate">
+                      https://imgyzcbqoaolrvowdngp.supabase.co/functions/v1/whatsapp-webhook
+                    </code>
+                    <button
+                      onClick={() => copyText('https://imgyzcbqoaolrvowdngp.supabase.co/functions/v1/whatsapp-webhook', 'webhook')}
+                      className="px-3 py-1.5 border border-neutral-200 rounded bg-white hover:bg-neutral-50 text-xs text-neutral-600 transition-colors flex-shrink-0 font-medium"
+                    >
+                      {waCopied === 'webhook' ? '✓ Copied' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-neutral-500 mb-1">Verify Token</p>
+                  <div className="flex gap-2 items-center">
+                    <code className="flex-1 text-xs bg-white border border-neutral-200 rounded px-2 py-1.5 text-neutral-700 font-mono">
+                      765crm-webhook-v1
+                    </code>
+                    <button
+                      onClick={() => copyText('765crm-webhook-v1', 'verify')}
+                      className="px-3 py-1.5 border border-neutral-200 rounded bg-white hover:bg-neutral-50 text-xs text-neutral-600 transition-colors flex-shrink-0 font-medium"
+                    >
+                      {waCopied === 'verify' ? '✓ Copied' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Phone Number ID input */}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-neutral-700 mb-1">
+                  Phone Number ID
+                  <span className="font-normal text-neutral-400 ml-1">— from Meta Business Manager → WhatsApp → Phone Numbers</span>
+                </label>
+                <input
+                  value={waPhoneNumberId}
+                  onChange={e => setWaPhoneNumberId(e.target.value)}
+                  placeholder="e.g. 123456789012345"
+                  className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-700 mb-1">
+                  Display number
+                  <span className="font-normal text-neutral-400 ml-1">(optional label for your reference)</span>
+                </label>
+                <input
+                  value={waDisplayPhone}
+                  onChange={e => setWaDisplayPhone(e.target.value)}
+                  placeholder="e.g. +234 801 234 5678"
+                  className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+
+              {waError && (
+                <p className="text-xs text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                  {waError}
+                </p>
+              )}
+
+              <button
+                onClick={saveWaConnection}
+                disabled={waSaving || !waPhoneNumberId.trim()}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
+              >
+                {waSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : waSaved ? <Check className="w-4 h-4" /> : null}
+                {waSaved ? 'Saved' : 'Save configuration'}
+              </button>
+            </div>
+          </>
+        )}
       </section>
 
       {/* ── Social Media Integration ── */}

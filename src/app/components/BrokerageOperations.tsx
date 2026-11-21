@@ -4,7 +4,7 @@ import {
   Send, Home, ShieldCheck, TrendingUp, Banknote, Loader2,
   CheckCircle2, Star, StarOff, Trash2, Edit3, Tag, BedDouble, Bath,
   ClipboardList, Check, MoreVertical, Upload, FileText, AlertTriangle, Printer,
-  RefreshCw, Instagram, Facebook, ExternalLink, Link2,
+  RefreshCw, Instagram, Facebook, ExternalLink, Link2, Copy,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -133,6 +133,7 @@ export function BrokerageOperations() {
   const [savingListing, setSavingListing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [copiedListingId, setCopiedListingId] = useState<string | null>(null);
 
   // Log inquiry modal
   const [showLogInquiry, setShowLogInquiry] = useState(false);
@@ -495,6 +496,29 @@ export function BrokerageOperations() {
       setListingForm(f => ({ ...f, image_url: data.publicUrl }));
     }
     setUploadingImage(false);
+  }
+
+  function generateCaption(listing: Listing): string {
+    const beds = listing.bedrooms ? `${listing.bedrooms}-Bedroom ` : '';
+    const typeLabel = listing.property_type ?? 'Property';
+    const lines: string[] = [`🏠 *${beds}${typeLabel} for Sale — ${listing.location}*`, ''];
+    if (listing.price_label) lines.push(`💰 *Price: ${listing.price_label}*`, '');
+    const specs: string[] = [];
+    if (listing.bedrooms) specs.push(`🛏️ ${listing.bedrooms} Bedroom${listing.bedrooms > 1 ? 's' : ''}`);
+    if (listing.bathrooms) specs.push(`🚿 ${listing.bathrooms} Bathroom${listing.bathrooms > 1 ? 's' : ''}`);
+    if (specs.length) lines.push(specs.join('  '), '');
+    if (listing.description) lines.push(listing.description, '');
+    lines.push('📲 Interested? Send us a message — we respond immediately!', '');
+    const locationTag = listing.location.split(',')[0].trim().replace(/\s+/g, '');
+    const typeTag = (listing.property_type ?? 'Property').replace(/[\s/]+/g, '');
+    lines.push(`#765Realty #LagosRealEstate #${typeTag} #${locationTag}`);
+    return lines.join('\n');
+  }
+
+  async function copyCaption(listing: Listing) {
+    await navigator.clipboard.writeText(generateCaption(listing));
+    setCopiedListingId(listing.id);
+    setTimeout(() => setCopiedListingId(null), 2500);
   }
 
   // ── New request handler ───────────────────────────────────────────────────
@@ -1179,6 +1203,19 @@ export function BrokerageOperations() {
                           : <Trash2 className="w-3.5 h-3.5" />}
                       </button>
                     </div>
+                    {/* Copy caption for social media */}
+                    <button
+                      onClick={() => copyCaption(listing)}
+                      className={`w-full mt-2 flex items-center justify-center gap-1.5 text-xs py-1.5 rounded-lg border transition-colors ${
+                        copiedListingId === listing.id
+                          ? 'bg-green-50 border-green-200 text-green-700 font-medium'
+                          : 'border-neutral-200 text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700'
+                      }`}
+                    >
+                      {copiedListingId === listing.id
+                        ? <><Check className="w-3.5 h-3.5" /> Caption copied to clipboard</>
+                        : <><Copy className="w-3.5 h-3.5" /> Copy social caption</>}
+                    </button>
                   </div>
                 </div>
               ))}
@@ -1246,6 +1283,51 @@ export function BrokerageOperations() {
                 <p className="text-2xl font-semibold text-neutral-900 mt-1">{intakes.length}</p>
               </div>
             </div>
+          </div>
+
+          {/* Listings overview */}
+          <div className="bg-white border border-neutral-200 rounded-xl p-6">
+            <h3 className="font-semibold text-neutral-900 mb-4">Listings Overview</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+              {[
+                { label: 'Active', value: listings.filter(l => l.status === 'active').length, cls: 'bg-emerald-50 text-emerald-700' },
+                { label: 'Sold', value: listings.filter(l => l.status === 'sold').length, cls: 'bg-neutral-100 text-neutral-600' },
+                { label: 'Featured', value: listings.filter(l => l.is_featured).length, cls: 'bg-amber-50 text-amber-700' },
+                { label: 'Total', value: listings.length, cls: 'bg-blue-50 text-blue-700' },
+              ].map(s => (
+                <div key={s.label} className={`rounded-lg p-4 ${s.cls}`}>
+                  <p className="text-xs font-medium">{s.label}</p>
+                  <p className="text-2xl font-semibold text-neutral-900 mt-1">{s.value}</p>
+                </div>
+              ))}
+            </div>
+            {listings.length > 0 && (() => {
+              const byType: Record<string, number> = {};
+              for (const l of listings) {
+                const t = l.property_type ?? 'Other';
+                byType[t] = (byType[t] ?? 0) + 1;
+              }
+              const entries = Object.entries(byType).sort((a, b) => b[1] - a[1]);
+              return (
+                <div>
+                  <p className="text-sm font-medium text-neutral-700 mb-3">By Property Type</p>
+                  <div className="space-y-2">
+                    {entries.map(([type, count]) => (
+                      <div key={type} className="flex items-center gap-3">
+                        <span className="text-sm text-neutral-600 w-44 flex-shrink-0 truncate">{type}</span>
+                        <div className="flex-1 bg-neutral-100 rounded-full h-2">
+                          <div
+                            className="h-2 rounded-full bg-blue-400 transition-all"
+                            style={{ width: `${(count / listings.length) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-medium text-neutral-700 w-6 text-right">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

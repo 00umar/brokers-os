@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Brokers OS — App Icon</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    background: #080D18;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    gap: 36px;
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    color: #CBD5E1;
+  }
+  .title { text-align: center; }
+  .title h2 { font-size: 1rem; font-weight: 700; color: #F8FAFC; letter-spacing: 0.14em; text-transform: uppercase; }
+  .title p { font-size: 0.78rem; color: #475569; margin-top: 6px; }
+  .previews {
+    display: flex;
+    align-items: flex-end;
+    gap: 36px;
+    background: #0F172A;
+    border: 1px solid #1E293B;
+    border-radius: 18px;
+    padding: 40px 48px;
+  }
+  .prev { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .prev canvas { border-radius: 22%; display: block; }
+  .prev span { font-size: 0.68rem; color: #334155; letter-spacing: 0.08em; text-transform: uppercase; }
+  .btn {
+    background: #2563EB; color: #fff; border: none;
+    padding: 14px 44px; border-radius: 10px;
+    font-size: 0.9rem; font-weight: 600; cursor: pointer;
+    letter-spacing: 0.02em; transition: background 0.15s;
+  }
+  .btn:hover { background: #1D4ED8; }
+  .hint { font-size: 0.72rem; color: #334155; text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="title">
+  <h2>Brokers OS</h2>
+  <p>App Icon · 1024 × 1024 px</p>
+</div>
+
+<div class="previews">
+  <div class="prev">
+    <canvas id="lg" style="width:180px;height:180px"></canvas>
+    <span>180 px</span>
+  </div>
+  <div class="prev">
+    <canvas id="md" style="width:72px;height:72px"></canvas>
+    <span>72 px</span>
+  </div>
+  <div class="prev">
+    <canvas id="sm" style="width:36px;height:36px"></canvas>
+    <span>36 px</span>
+  </div>
+</div>
+
+<button class="btn" onclick="dl()">⬇ Download 1024 × 1024 PNG</button>
+<p class="hint">Facebook App → Settings → Basic → App Icon</p>
+
+<script>
+function draw(canvas, size) {
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const s = size / 1024;
+
+  ctx.fillStyle = '#0F172A';
+  ctx.fillRect(0, 0, size, size);
+
+  const base = 780 * s;
+  const bW   = 220 * s;
+
+  const buildings = [
+    { x: 166 * s, h: 300 * s },
+    { x: 402 * s, h: 480 * s },
+    { x: 638 * s, h: 360 * s },
+  ];
+
+  buildings.forEach(b => {
+    const top = base - b.h;
+    ctx.fillStyle = '#E2E8F0';
+    ctx.fillRect(b.x, top, bW, b.h);
+
+    const wW = 58 * s, wH = 38 * s;
+    const cGap = 24 * s, rGap = 20 * s;
+    const padX = 30 * s, padT = 28 * s;
+    ctx.fillStyle = '#0F172A';
+    let row = 0;
+    while (true) {
+      const wy = top + padT + row * (wH + rGap);
+      if (wy + wH > base - 28 * s) break;
+      ctx.fillRect(b.x + padX, wy, wW, wH);
+      ctx.fillRect(b.x + padX + wW + cGap, wy, wW, wH);
+      row++;
+    }
+  });
+
+  const cx = 512 * s;
+  const sy = (780 - 480 - 20) * s;
+
+  ctx.lineCap = 'round';
+  [
+    { r: 54,  lw: 20, alpha: 1.0  },
+    { r: 104, lw: 15, alpha: 0.60 },
+    { r: 156, lw: 11, alpha: 0.30 },
+  ].forEach(a => {
+    ctx.globalAlpha = a.alpha;
+    ctx.strokeStyle = '#60A5FA';
+    ctx.lineWidth   = a.lw * s;
+    ctx.beginPath();
+    ctx.arc(cx, sy, a.r * s, Math.PI, 0, false);
+    ctx.stroke();
+  });
+
+  ctx.globalAlpha = 1;
+
+  ctx.fillStyle = '#3B82F6';
+  ctx.beginPath();
+  ctx.arc(cx, sy, 16 * s, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath();
+  ctx.arc(cx, sy, 6 * s, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+draw(document.getElementById('lg'), 1024);
+draw(document.getElementById('md'), 512);
+draw(document.getElementById('sm'), 256);
+
+function dl() {
+  const off = document.createElement('canvas');
+  draw(off, 1024);
+  const a = document.createElement('a');
+  a.download = 'brokers-os-icon.png';
+  a.href = off.toDataURL('image/png');
+  a.click();
+}
+</script>
+</body>
+</html>
