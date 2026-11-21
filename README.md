@@ -84,6 +84,7 @@ The same two `VITE_` values must be set in **Vercel → Project → Settings →
 | [migrations_pending.sql](migrations_pending.sql) | Columns and tables added after the base schema | After the schema. It is safe to run more than once. |
 | [whatsapp_migration.sql](whatsapp_migration.sql) | WhatsApp lead-capture tables | Before using WhatsApp lead capture |
 | [seed-mock-workers.sql](seed-mock-workers.sql) | Fake field-worker data for demos | Optional, for testing only |
+| [seed-demo-social-leads.sql](seed-demo-social-leads.sql) | Demo Instagram/Facebook posts and leads (tagged `demo-`, removal SQL inside) | Optional, for demos only |
 
 > **Free plan warning:** Supabase pauses free projects after about a week without use. When that happens nobody can log in. Restore the project from the Supabase dashboard, or upgrade to Pro so it never pauses.
 
@@ -137,6 +138,7 @@ The Meta (Facebook/Instagram) verify token still contains the old "765" naming o
 - [ ] **WhatsApp lead capture:** run `whatsapp_migration.sql`, deploy `whatsapp-webhook`, configure it in Meta, test.
 - [ ] **Fill in Company Settings:** company name, contact email, WhatsApp manager number and bank details. Offer letters, payment instructions, the client portal, field worker WhatsApp buttons and staff messages all read from here. Anything not filled in shows "Not set" or a neutral placeholder.
 - [ ] **Public pages are shared by all companies.** `/listings` and `/intake` show every company's listings, and intake requests don't record which company they are for, so these pages carry Brokers OS branding. The proper fix is a public link per company (e.g. `/c/765-realty/listings`).
+- [ ] **Social leads/posts are visible to every company.** Restrict the database rules to the user's own company before real brokers start.
 - [ ] **Confirm which migrations have run** on the live database.
 - [ ] **Later (when on Supabase Pro): connect Supabase to GitHub.** Not needed now, because database changes are run by hand from the `.sql` files. When there are real clients, move the SQL into `supabase/migrations/` and connect it, so database changes deploy automatically with the code.
 - [ ] **Finish the move to `brokers-os-app.vercel.app`:**

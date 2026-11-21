@@ -4,6 +4,10 @@ A dated record of what changed and why. Newest entries are at the top. Every cha
 
 ---
 
+## 2026-11-21 (demo social leads)
+- Added `seed-demo-social-leads.sql`: 6 demo posts and 16 realistic demo leads for the super admin's company. All rows are tagged `demo-`, and the file includes the SQL to remove them.
+- **Security gap found:** the `social_leads` and `social_posts` database rules let *any* logged-in user see every company's rows. They must be restricted to the user's own company before real brokers start.
+
 ## 2026-11-21 (demo readiness check)
 - Checked the live database from outside. All app tables exist (including `whatsapp_connections` and `whatsapp_leads`, so the WhatsApp migration **has** been run).
 - **Missing:** the `companies.email` column (saving Company Profile fails) and the `listing-images` storage bucket (listing photo uploads fail). The fix was added as section 12 of `migrations_pending.sql`.
