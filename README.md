@@ -85,6 +85,8 @@ The same two `VITE_` values must be set in **Vercel → Project → Settings →
 | [whatsapp_migration.sql](whatsapp_migration.sql) | WhatsApp lead-capture tables | Before using WhatsApp lead capture |
 | [seed-mock-workers.sql](seed-mock-workers.sql) | Fake field-worker data for demos | Optional, for testing only |
 
+> **Free plan warning:** Supabase pauses free projects after about a week without use. When that happens nobody can log in. Restore the project from the Supabase dashboard, or upgrade to Pro so it never pauses.
+
 Run each file in **Supabase → SQL Editor → New query**: paste the file's contents, then click Run.
 
 > Keep a note in [docs/CHANGELOG.md](docs/CHANGELOG.md) of which SQL files have been run on the live database.

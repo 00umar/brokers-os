@@ -4,6 +4,11 @@ A dated record of what changed and why. Newest entries are at the top. Every cha
 
 ---
 
+## 2026-11-21 (database outage)
+- **Nobody could log in.** The cause was the Supabase project (`imgyzcbqoaolrvowdngp`) being paused for inactivity on the free plan, which made its address stop existing. The owner restored it from the Supabase dashboard. Login and data access were confirmed working again the same day.
+- To prevent it: keep the app in regular use, or move to the Supabase Pro plan, which never pauses.
+- "Not connected to GitHub" in Supabase is the optional GitHub integration. It isn't used and isn't a problem.
+
 ## 2026-11-21 (hosting rename)
 - **GitHub repo renamed** from `00umar/765-crm` to `00umar/brokers-os`. GitHub forwards the old URL, and the local git remote has been updated.
 - **New web address: https://brokers-os-app.vercel.app**, added to the Vercel project `765-crm` and confirmed live. `brokers-os.vercel.app` and `brokersos.vercel.app` were already owned by other Vercel accounts. The old `765-crm.vercel.app` still works. Supabase and Meta still need updating (see the README open items). No code changes were needed, because the app never hard-codes its own address.
