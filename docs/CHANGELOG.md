@@ -4,6 +4,11 @@ A dated record of what changed and why. Newest entries are at the top. Every cha
 
 ---
 
+## 2026-11-21 (demo readiness check)
+- Checked the live database from outside. All app tables exist (including `whatsapp_connections` and `whatsapp_leads`, so the WhatsApp migration **has** been run).
+- **Missing:** the `companies.email` column (saving Company Profile fails) and the `listing-images` storage bucket (listing photo uploads fail). The fix was added as section 12 of `migrations_pending.sql`.
+- **Fake data still in the code:** Project Management shows made-up site photos and notes whenever a task has no real evidence.
+
 ## 2026-11-21 (lead capture research)
 - Researched ways to capture Instagram/Facebook leads without forms or Meta hurdles. See [lead-capture-options.md](lead-capture-options.md).
 
@@ -80,4 +85,4 @@ Record each file here when it is run on the live database, with the date.
 |---|---|---|
 | _unknown_ | `supabase_schema.sql` | |
 | _unknown_ | `migrations_pending.sql` | |
-| not yet | `whatsapp_migration.sql` | |
+| before 2026-11-21 (confirmed by checking) | `whatsapp_migration.sql` | |

@@ -264,3 +264,28 @@ CREATE POLICY "Auth full access" ON social_leads
 -- Done.
 -- After running: deploy the app so the new columns are live.
 -- ============================================================
+
+
+-- ============================================================
+-- 12. DEMO FIXES (added 2026-11-21) — found missing on the live database
+-- ============================================================
+
+-- Company contact email (used on offer letters / Company Profile)
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS email text;
+
+-- Storage bucket for listing photos (uploads fail without it)
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('listing-images', 'listing-images', true)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "Staff can upload listing images" ON storage.objects;
+CREATE POLICY "Staff can upload listing images" ON storage.objects
+  FOR INSERT TO authenticated WITH CHECK (bucket_id = 'listing-images');
+
+DROP POLICY IF EXISTS "Staff can update listing images" ON storage.objects;
+CREATE POLICY "Staff can update listing images" ON storage.objects
+  FOR UPDATE TO authenticated USING (bucket_id = 'listing-images');
+
+DROP POLICY IF EXISTS "Anyone can view listing images" ON storage.objects;
+CREATE POLICY "Anyone can view listing images" ON storage.objects
+  FOR SELECT USING (bucket_id = 'listing-images');
