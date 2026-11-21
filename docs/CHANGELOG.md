@@ -4,6 +4,10 @@ A dated record of what changed and why. Newest entries are at the top. Every cha
 
 ---
 
+## 2026-11-21 (hosting rename)
+- **GitHub repo renamed** from `00umar/765-crm` to `00umar/brokers-os`. GitHub forwards the old URL, and the local git remote has been updated.
+- **Web address moving to `brokers-os.vercel.app`.** This has to be done in the Vercel dashboard (see the README open items for the full checklist, including the Supabase and Meta settings). No code changes were needed, because the app never hard-codes its own address.
+
 ## 2026-11-21 (later)
 - **Removed the hard-coded "765 Realty" from the app.** Each company's own details now come from Company Settings:
   - Offer letters and settlement instructions: company name, "For <company>" signature block, account name, contact email for proof of payment, and a reference prefix based on the company name (e.g. `765-AB12CD34`).
