@@ -138,6 +138,7 @@ The Meta (Facebook/Instagram) verify token still contains the old "765" naming o
 - [ ] **Fill in Company Settings:** company name, contact email, WhatsApp manager number and bank details. Offer letters, payment instructions, the client portal, field worker WhatsApp buttons and staff messages all read from here. Anything not filled in shows "Not set" or a neutral placeholder.
 - [ ] **Public pages are shared by all companies.** `/listings` and `/intake` show every company's listings, and intake requests don't record which company they are for, so these pages carry Brokers OS branding. The proper fix is a public link per company (e.g. `/c/765-realty/listings`).
 - [ ] **Confirm which migrations have run** on the live database.
+- [ ] **Later (when on Supabase Pro): connect Supabase to GitHub.** Not needed now, because database changes are run by hand from the `.sql` files. When there are real clients, move the SQL into `supabase/migrations/` and connect it, so database changes deploy automatically with the code.
 - [ ] **Finish the move to `brokers-os-app.vercel.app`:**
   1. ~~Vercel: add `brokers-os-app.vercel.app`~~ Done 2026-11-21. (`brokers-os.vercel.app` and `brokersos.vercel.app` were already taken by other people.) `765-crm.vercel.app` still works.
   2. Supabase → Authentication → URL Configuration → set Site URL to `https://brokers-os-app.vercel.app`, and add `https://brokers-os-app.vercel.app/**` to Redirect URLs.
