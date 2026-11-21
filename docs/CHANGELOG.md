@@ -4,6 +4,9 @@ A dated record of what changed and why. Newest entries are at the top. Every cha
 
 ---
 
+## 2026-11-21 (lead capture research)
+- Researched ways to capture Instagram/Facebook leads without forms or Meta hurdles. See [lead-capture-options.md](lead-capture-options.md).
+
 ## 2026-11-21 (business update)
 - 765 Realty is no longer a client. The next step is to onboard about 2 brokers as the first real users, have them use Brokers OS end to end, and market it after that.
 
