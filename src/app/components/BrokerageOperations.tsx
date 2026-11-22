@@ -9,6 +9,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCompanySettings } from '../../hooks/useCompanySettings';
+import { loadDemoSocialData, clearDemoSocialData } from '../../lib/demoSocialData';
 import { useSocialFeed } from '../../hooks/useSocialFeed';
 import type { Client, Deal, BrokerNote, IntakeRequest, Listing, DealStage, SalesTask, OfferLetter } from '../../lib/database.types';
 
@@ -81,7 +82,19 @@ export function BrokerageOperations() {
   const coEmail = companySettings?.email?.trim() || '';
   const coRefPrefix = coName.split(/\s+/)[0].replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase() || 'REF';
   const coHashtag = coName.replace(/[^A-Za-z0-9]/g, '');
-  const { connection: socialConnection, posts: socialPosts, leads: socialLeads, loading: socialLoading, syncing: socialSyncing, syncPosts, updateLeadStatus } = useSocialFeed();
+  const { connection: socialConnection, posts: socialPosts, leads: socialLeads, loading: socialLoading, syncing: socialSyncing, syncPosts, updateLeadStatus, reload: reloadSocial } = useSocialFeed();
+  const [demoBusy, setDemoBusy] = useState(false);
+  const [demoMsg, setDemoMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const hasDemoSocial = socialLeads.some(l => l.commenter_id?.startsWith('demo-')) || socialPosts.some(p => p.external_id?.startsWith('demo-'));
+
+  async function handleDemoSocial(action: 'load' | 'clear') {
+    setDemoBusy(true);
+    setDemoMsg(null);
+    const err = action === 'load' ? await loadDemoSocialData(profile?.company_id) : await clearDemoSocialData();
+    await reloadSocial();
+    setDemoMsg(err ? { ok: false, text: err } : { ok: true, text: action === 'load' ? 'Demo leads loaded.' : 'Demo data removed.' });
+    setDemoBusy(false);
+  }
   const [activeTab, setActiveTab] = useState<'pipeline' | 'intake' | 'clients' | 'listings' | 'social' | 'analytics'>('pipeline');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -1434,6 +1447,34 @@ export function BrokerageOperations() {
               </button>
             )}
           </div>
+
+          {/* Demo data controls (admins only) */}
+          {(profile?.role === 'admin' || profile?.is_super_admin) && (
+            <div className="flex flex-wrap items-center gap-3">
+              {hasDemoSocial ? (
+                <button
+                  onClick={() => handleDemoSocial('clear')}
+                  disabled={demoBusy}
+                  className="flex items-center gap-2 px-3 py-1.5 border border-neutral-200 text-neutral-600 rounded-lg text-xs font-medium hover:bg-neutral-50 disabled:opacity-60"
+                >
+                  {demoBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Remove demo leads
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleDemoSocial('load')}
+                  disabled={demoBusy}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 text-white rounded-lg text-xs font-medium hover:bg-neutral-800 disabled:opacity-60"
+                >
+                  {demoBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Load demo leads
+                </button>
+              )}
+              {demoMsg && (
+                <span className={`text-xs ${demoMsg.ok ? 'text-green-700' : 'text-red-600'}`}>{demoMsg.text}</span>
+              )}
+            </div>
+          )}
 
           {/* Sub-tabs: Leads | Posts */}
           <div className="flex gap-1 bg-neutral-100 p-1 rounded-lg w-fit">

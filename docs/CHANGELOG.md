@@ -5,6 +5,7 @@ A dated record of what changed and why. Newest entries are at the top. Every cha
 ---
 
 ## 2026-11-22
+- **"Load demo leads" button in Brokerage → Social Leads** (admins only). It adds 6 demo posts and 16 demo leads through the app using the admin's own login, because running the SQL seed didn't populate the tab. If the database blocks it, the exact error is shown on screen. A "Remove demo leads" button clears them. Demo rows are tagged `demo-`, and the data lives in `src/lib/demoSocialData.ts`.
 - **Pipeline: "Assigned To" dropdown.** Each deal now has a dropdown of the company's active team members, so a deal can be handed over to someone else. Every hand-over is written into the deal's notes ("Deal assigned to …"). The pipeline table has a new "Assigned To" column.
 - **Sales Support task "Assign to"** is now a dropdown of team members instead of free text.
 - **Critical bug found:** the app saves a company ID on clients, deals and intake requests, but the live database had no such column, so **New Request, Add to Pipeline and Log Inquiry were failing silently.** The fix is section 13 of `migrations_pending.sql`, which also adds the column to listings and broker notes and assigns existing rows to the super admin's company.
