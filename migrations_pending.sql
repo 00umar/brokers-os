@@ -289,3 +289,33 @@ CREATE POLICY "Staff can update listing images" ON storage.objects
 DROP POLICY IF EXISTS "Anyone can view listing images" ON storage.objects;
 CREATE POLICY "Anyone can view listing images" ON storage.objects
   FOR SELECT USING (bucket_id = 'listing-images');
+
+
+-- ============================================================
+-- 13. COMPANY COLUMN ON CORE TABLES (added 2026-11-22)
+-- The app saves company_id on clients, deals and intake requests, but the
+-- live database had no such column, so those saves were being rejected.
+-- Existing rows are given the super admin's company.
+-- ============================================================
+
+ALTER TABLE clients         ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES companies(id) ON DELETE CASCADE;
+ALTER TABLE deals           ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES companies(id) ON DELETE CASCADE;
+ALTER TABLE intake_requests ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES companies(id) ON DELETE CASCADE;
+ALTER TABLE listings        ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES companies(id) ON DELETE CASCADE;
+ALTER TABLE broker_notes    ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES companies(id) ON DELETE CASCADE;
+
+DO $$
+DECLARE cid uuid;
+BEGIN
+  SELECT company_id INTO cid FROM profiles WHERE is_super_admin = true AND company_id IS NOT NULL LIMIT 1;
+  IF cid IS NOT NULL THEN
+    UPDATE clients         SET company_id = cid WHERE company_id IS NULL;
+    UPDATE deals           SET company_id = cid WHERE company_id IS NULL;
+    UPDATE intake_requests SET company_id = cid WHERE company_id IS NULL;
+    UPDATE listings        SET company_id = cid WHERE company_id IS NULL;
+    UPDATE broker_notes    SET company_id = cid WHERE company_id IS NULL;
+  END IF;
+END $$;
+
+-- Make the API pick up the new columns immediately
+NOTIFY pgrst, 'reload schema';

@@ -4,6 +4,11 @@ A dated record of what changed and why. Newest entries are at the top. Every cha
 
 ---
 
+## 2026-11-22
+- **Pipeline: "Assigned To" dropdown.** Each deal now has a dropdown of the company's active team members, so a deal can be handed over to someone else. Every hand-over is written into the deal's notes ("Deal assigned to …"). The pipeline table has a new "Assigned To" column.
+- **Sales Support task "Assign to"** is now a dropdown of team members instead of free text.
+- **Critical bug found:** the app saves a company ID on clients, deals and intake requests, but the live database had no such column, so **New Request, Add to Pipeline and Log Inquiry were failing silently.** The fix is section 13 of `migrations_pending.sql`, which also adds the column to listings and broker notes and assigns existing rows to the super admin's company.
+
 ## 2026-11-21 (demo social leads)
 - Added `seed-demo-social-leads.sql`: 6 demo posts and 16 realistic demo leads for the super admin's company. All rows are tagged `demo-`, and the file includes the SQL to remove them.
 - **Security gap found:** the `social_leads` and `social_posts` database rules let *any* logged-in user see every company's rows. They must be restricted to the user's own company before real brokers start.

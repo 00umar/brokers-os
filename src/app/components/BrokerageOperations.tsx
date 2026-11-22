@@ -112,6 +112,10 @@ export function BrokerageOperations() {
   const [salesRequestForm, setSalesRequestForm] = useState({ action: '', assigned_to_name: '', due_date: '' });
   const [savingSalesRequest, setSavingSalesRequest] = useState(false);
 
+  // Staff who can be assigned deals / tasks
+  const [staff, setStaff] = useState<{ id: string; full_name: string; role: string }[]>([]);
+  const [assigningDeal, setAssigningDeal] = useState(false);
+
   // Offer letters
   const [dealLetters, setDealLetters] = useState<OfferLetter[]>([]);
   const [viewingLetter, setViewingLetter] = useState<{ letter: OfferLetter; deal: Deal; clientName: string } | null>(null);
@@ -161,6 +165,52 @@ export function BrokerageOperations() {
     fetchIntakes();
     fetchListings();
   }, []);
+
+  useEffect(() => {
+    async function fetchStaff() {
+      let q = supabase
+        .from('profiles')
+        .select('id, full_name, role, status, company_id')
+        .neq('role', 'client')
+        .order('full_name');
+      if (profile?.company_id) q = q.eq('company_id', profile.company_id);
+      const { data } = await q;
+      setStaff(((data ?? []) as { id: string; full_name: string; role: string; status?: string }[])
+        .filter(s => s.status !== 'suspended' && s.status !== 'pending' && s.full_name));
+    }
+    fetchStaff();
+  }, [profile?.company_id]);
+
+  function staffName(id?: string | null) {
+    return id ? staff.find(s => s.id === id)?.full_name ?? null : null;
+  }
+
+  async function assignDeal(brokerId: string) {
+    if (!selectedDeal) return;
+    setAssigningDeal(true);
+    const newId = brokerId || null;
+    const { error } = await supabase.from('deals').update({ assigned_broker: newId }).eq('id', selectedDeal.id);
+    if (!error) {
+      const updated = { ...selectedDeal, assigned_broker: newId ?? undefined };
+      setSelectedDeal(updated);
+      setDealsByStage(prev => {
+        const next: Record<string, Deal[]> = {};
+        for (const [stage, list] of Object.entries(prev)) next[stage] = list.map(d => d.id === updated.id ? updated : d);
+        return next;
+      });
+      // Keep a record of the hand-over in the deal's notes
+      const who = staffName(newId) ?? 'Unassigned';
+      const { data: note } = await supabase.from('broker_notes').insert({
+        deal_id: selectedDeal.id,
+        content: newId ? `Deal assigned to ${who}` : 'Deal unassigned',
+        author_id: profile?.id,
+        author_name: profile?.full_name ?? 'System',
+        stage_at_time: selectedDeal.stage,
+      }).select().single();
+      if (note) setDealNotes(p => [note as BrokerNote, ...p]);
+    }
+    setAssigningDeal(false);
+  }
 
   // ── Fetchers ─────────────────────────────────────────────────────────────
 
@@ -894,6 +944,7 @@ export function BrokerageOperations() {
                         <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Stage</th>
                         <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Budget</th>
                         <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Location</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Assigned To</th>
                         <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Payment</th>
                       </tr>
                     </thead>
@@ -942,6 +993,9 @@ export function BrokerageOperations() {
                             </td>
                             <td className="px-5 py-4 text-sm text-neutral-500">
                               {deal.location ?? <span className="text-neutral-400">—</span>}
+                            </td>
+                            <td className="px-5 py-4 text-sm text-neutral-700">
+                              {staffName(deal.assigned_broker) ?? <span className="text-neutral-400">Unassigned</span>}
                             </td>
                             <td className="px-5 py-4">
                               <span className={`inline-flex text-xs px-2.5 py-1 rounded-full font-medium ${
@@ -1650,6 +1704,30 @@ export function BrokerageOperations() {
                 </div>
               </div>
 
+              {/* Assigned to */}
+              <div>
+                <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-3">Assigned To</p>
+                <div className="flex items-center gap-3">
+                  <select
+                    value={selectedDeal.assigned_broker ?? ''}
+                    onChange={e => assignDeal(e.target.value)}
+                    disabled={assigningDeal}
+                    className="flex-1 px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                  >
+                    <option value="">— Unassigned —</option>
+                    {staff.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.full_name}{s.id === profile?.id ? ' (me)' : ''} · {s.role.replace('_', ' ')}
+                      </option>
+                    ))}
+                  </select>
+                  {assigningDeal && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
+                </div>
+                {staff.length === 0 && (
+                  <p className="text-xs text-neutral-400 mt-1.5">No team members yet. Invite staff in Team Management.</p>
+                )}
+              </div>
+
               {/* Deal details */}
               <div>
                 <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-3">Deal Details</p>
@@ -1859,12 +1937,18 @@ export function BrokerageOperations() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs text-neutral-500 mb-1">Assign to</label>
-                        <input
+                        <select
                           value={salesRequestForm.assigned_to_name}
                           onChange={e => setSalesRequestForm(f => ({ ...f, assigned_to_name: e.target.value }))}
-                          placeholder="Sales team member"
-                          className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
+                          className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">Select team member</option>
+                          {staff.map(s => (
+                            <option key={s.id} value={s.full_name}>
+                              {s.full_name}{s.id === profile?.id ? ' (me)' : ''}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className="block text-xs text-neutral-500 mb-1">Due date</label>
