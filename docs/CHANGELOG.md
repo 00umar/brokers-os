@@ -4,6 +4,16 @@ A dated record of what changed and why. Newest entries are at the top. Every cha
 
 ---
 
+## 2026-11-22 (Team Task pop-up)
+- **Team Tasks now open their own pop-up** instead of sending people into the full Brokerage deal manager. The deal pop-up is for the person handling the deal (stages, payment, offer letters). The task pop-up is for the person doing one job:
+  - the task, its type and status, an editable due date (to reschedule), and "Who is doing it" (to reassign)
+  - a client card with Call and WhatsApp
+  - a **read-only** deal summary (property, location, budget, stage, handled by)
+  - **"How did it go?"**: one-tap outcomes that fit the task type (e.g. a call: Interested / No answer / Call back later / Not interested), plus a note
+  - **Mark done** or **Save update**. Both go into the Activity Log **and the deal's notes**, so the deal's handler sees the outcome in Brokerage.
+  - recent history with the client, Reopen for finished tasks, and a small "Open full deal" link for managers
+- Task cards: clicking a card (or **Update / Done**) opens the pop-up. Call and WhatsApp still work straight from the card.
+
 ## 2026-11-22 (Sales & Marketing rebuild)
 **Why:** Sales & Marketing didn't match what was originally intended. Partnerships and Activity Log were fake data, the Filter and Add Partner buttons did nothing, two top numbers never changed, and the lead pop-up was small and nearly useless.
 

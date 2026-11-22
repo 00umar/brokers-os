@@ -57,7 +57,32 @@ const emptyLeadForm = {
 
 const emptyTaskForm = { action: '', task_type: 'call' as TaskType, assigned_to: '', due_date: '' };
 
-interface DealInfo { id: string; title: string; stage: string; client_name?: string; client_phone?: string }
+interface DealInfo {
+  id: string; title: string; stage: string; client_name?: string; client_phone?: string; client_type?: string;
+  location?: string; property_type?: string; budget_min?: number; budget_max?: number; assigned_broker?: string;
+}
+
+// One-tap outcomes per task type ("How did it go?")
+const OUTCOMES: Record<string, string[]> = {
+  call: ['Interested', 'No answer', 'Call back later', 'Not interested'],
+  inspection: ['Client interested', 'Not interested', "Client didn't show", 'Rescheduled'],
+  send_details: ['Details sent', 'Client replied', 'No response yet'],
+  meeting: ['Meeting held', 'Postponed', 'Cancelled'],
+  other: ['Done', 'Needs follow-up'],
+};
+
+const STAGE_LABEL: Record<string, string> = {
+  new: 'New', contacted: 'Contacted', qualified: 'Qualified', sourcing: 'Sourcing',
+  inspection: 'Inspection', negotiation: 'Negotiation', closed: 'Closed',
+};
+
+function budgetText(min?: number, max?: number) {
+  const f = (n: number) => `₦${(n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 1)}M`;
+  if (min && max) return `${f(min)} – ${f(max)}`;
+  if (min) return `from ${f(min)}`;
+  if (max) return `up to ${f(max)}`;
+  return null;
+}
 
 function timeAgo(iso: string) {
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -120,6 +145,13 @@ export function SalesMarketing() {
   const [taskStatusFilter, setTaskStatusFilter] = useState<'pending' | 'completed' | 'all'>('pending');
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
 
+  // Task detail pop-up
+  const [selectedTask, setSelectedTask] = useState<SalesTask | null>(null);
+  const [taskOutcome, setTaskOutcome] = useState('');
+  const [taskUpdateNote, setTaskUpdateNote] = useState('');
+  const [savingTaskUpdate, setSavingTaskUpdate] = useState<'done' | 'update' | null>(null);
+  const [taskError, setTaskError] = useState<string | null>(null);
+
   useEffect(() => {
     Promise.all([fetchLeads(), fetchTasks(), fetchActivities(), fetchDeals()]).finally(() => setLoading(false));
   }, []);
@@ -149,10 +181,10 @@ export function SalesMarketing() {
   }
 
   async function fetchDeals() {
-    const { data } = await supabase.from('deals').select('id, title, stage, clients(name, phone)');
+    const { data } = await supabase.from('deals').select('id, title, stage, location, property_type, budget_min, budget_max, assigned_broker, clients(name, phone, type)');
     const map: Record<string, DealInfo> = {};
-    for (const d of (data ?? []) as unknown as { id: string; title: string; stage: string; clients?: { name?: string; phone?: string } | null }[]) {
-      map[d.id] = { id: d.id, title: d.title, stage: d.stage, client_name: d.clients?.name, client_phone: d.clients?.phone };
+    for (const d of (data ?? []) as unknown as (Omit<DealInfo, 'client_name' | 'client_phone' | 'client_type'> & { clients?: { name?: string; phone?: string; type?: string } | null })[]) {
+      map[d.id] = { ...d, client_name: d.clients?.name, client_phone: d.clients?.phone, client_type: d.clients?.type };
     }
     setDeals(map);
   }
@@ -331,17 +363,89 @@ export function SalesMarketing() {
 
   // ── Task handlers ─────────────────────────────────────────────────────────
 
-  async function completeTask(task: SalesTask) {
+  async function completeTask(task: SalesTask, outcome?: string, note?: string) {
     setCompletingTaskId(task.id);
     const completed_at = new Date().toISOString();
     let { error } = await supabase.from('sales_tasks').update({ status: 'completed', completed_at }).eq('id', task.id);
     if (error) ({ error } = await supabase.from('sales_tasks').update({ status: 'completed' }).eq('id', task.id));
     if (!error) {
-      setTasks(p => p.map(t => t.id === task.id ? { ...t, status: 'completed' as const, completed_at } : t));
+      patchTask(task.id, { status: 'completed', completed_at });
       const kind = task.task_type && task.task_type !== 'other' ? task.task_type : 'task_done';
-      record({ type: kind, description: `Done: ${task.action} (re: ${task.subject})`, deal_id: task.deal_id ?? null, lead_id: task.lead_id ?? null });
+      const result = [outcome, note].filter(Boolean).join(' — ');
+      record({ type: kind, description: `Done: ${task.action}${result ? ` → ${result}` : ''} (re: ${task.subject})`, deal_id: task.deal_id ?? null, lead_id: task.lead_id ?? null });
+      if (task.deal_id) await addDealNote(task.deal_id, `✅ ${taskTypeInfo(task.task_type).label} done: ${task.action}${result ? ` → ${result}` : ''}`);
     }
     setCompletingTaskId(null);
+    return error;
+  }
+
+  function patchTask(id: string, updates: Partial<SalesTask>) {
+    setTasks(p => p.map(t => t.id === id ? { ...t, ...updates } : t));
+    setSelectedTask(t => t && t.id === id ? { ...t, ...updates } : t);
+  }
+
+  // Writes into the deal's notes so the person handling the deal sees the outcome in Brokerage
+  async function addDealNote(dealId: string, content: string) {
+    const deal = deals[dealId];
+    await supabase.from('broker_notes').insert({
+      deal_id: dealId,
+      content,
+      author_id: profile?.id,
+      author_name: profile?.full_name ?? 'Team',
+      stage_at_time: deal?.stage,
+    });
+  }
+
+  function openTask(task: SalesTask) {
+    setSelectedTask(task);
+    setTaskOutcome('');
+    setTaskUpdateNote('');
+    setTaskError(null);
+  }
+
+  async function finishSelectedTask() {
+    if (!selectedTask) return;
+    setSavingTaskUpdate('done');
+    setTaskError(null);
+    const err = await completeTask(selectedTask, taskOutcome, taskUpdateNote.trim());
+    if (err) setTaskError(err.message);
+    else { setTaskOutcome(''); setTaskUpdateNote(''); }
+    setSavingTaskUpdate(null);
+  }
+
+  async function saveTaskProgress() {
+    if (!selectedTask || (!taskOutcome && !taskUpdateNote.trim())) return;
+    setSavingTaskUpdate('update');
+    const result = [taskOutcome, taskUpdateNote.trim()].filter(Boolean).join(' — ');
+    await record({ type: 'note', description: `Update on "${selectedTask.action}": ${result}`, deal_id: selectedTask.deal_id ?? null, lead_id: selectedTask.lead_id ?? null });
+    if (selectedTask.deal_id) await addDealNote(selectedTask.deal_id, `📝 ${taskTypeInfo(selectedTask.task_type).label} update: ${result}`);
+    setTaskOutcome('');
+    setTaskUpdateNote('');
+    setSavingTaskUpdate(null);
+  }
+
+  async function reopenTask(task: SalesTask) {
+    let { error } = await supabase.from('sales_tasks').update({ status: 'pending', completed_at: null }).eq('id', task.id);
+    if (error) ({ error } = await supabase.from('sales_tasks').update({ status: 'pending' }).eq('id', task.id));
+    if (!error) patchTask(task.id, { status: 'pending', completed_at: null });
+  }
+
+  async function rescheduleTask(task: SalesTask, due_date: string) {
+    const { error } = await supabase.from('sales_tasks').update({ due_date: due_date || null }).eq('id', task.id);
+    if (!error) {
+      patchTask(task.id, { due_date: due_date || undefined });
+      record({ type: 'note', description: `Rescheduled "${task.action}" to ${due_date ? fmtDate(due_date) : 'no date'}`, deal_id: task.deal_id ?? null, lead_id: task.lead_id ?? null });
+    }
+  }
+
+  async function reassignTask(task: SalesTask, staffId: string) {
+    const name = staffName(staffId);
+    let { error } = await supabase.from('sales_tasks').update({ assigned_to: staffId || null, assigned_to_name: name }).eq('id', task.id);
+    if (error) ({ error } = await supabase.from('sales_tasks').update({ assigned_to_name: name }).eq('id', task.id));
+    if (!error) {
+      patchTask(task.id, { assigned_to: staffId || null, assigned_to_name: name ?? undefined });
+      record({ type: 'handover', description: name ? `Gave task "${task.action}" to ${name}` : `Unassigned task "${task.action}"`, deal_id: task.deal_id ?? null, lead_id: task.lead_id ?? null });
+    }
   }
 
   // ── Derived values ────────────────────────────────────────────────────────
@@ -587,7 +691,7 @@ export function SalesMarketing() {
                   const type = taskTypeInfo(task.task_type);
                   const who = task.assigned_to ? staffName(task.assigned_to) ?? task.assigned_to_name : task.assigned_to_name;
                   return (
-                    <div key={task.id} className={`bg-white rounded-xl border p-4 md:p-5 ${isOverdue ? 'border-red-200' : 'border-neutral-200'}`}>
+                    <div key={task.id} onClick={() => openTask(task)} className={`bg-white rounded-xl border p-4 md:p-5 cursor-pointer hover:shadow-md transition-shadow ${isOverdue ? 'border-red-200' : 'border-neutral-200'}`}>
                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <div className="flex items-start gap-3 min-w-0">
                           <div className={`mt-1.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${task.status === 'completed' ? 'bg-green-500' : isOverdue ? 'bg-red-500' : 'bg-blue-500'}`} />
@@ -614,22 +718,10 @@ export function SalesMarketing() {
                         </div>
                         <div className="flex flex-wrap items-center gap-2 md:justify-end flex-shrink-0">
                           {task.status === 'pending' && <ContactButtons phone={contactPhone} name={contactName} small />}
-                          {deal && (
-                            <button onClick={() => navigate(`/app/brokerage?deal=${deal.id}`)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-neutral-100 text-neutral-700 hover:bg-neutral-200">
-                              <ExternalLink className="w-3.5 h-3.5" /> Open deal
-                            </button>
-                          )}
-                          {lead && (
-                            <button onClick={() => openLead(lead)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-neutral-100 text-neutral-700 hover:bg-neutral-200">
-                              <ExternalLink className="w-3.5 h-3.5" /> Open lead
-                            </button>
-                          )}
-                          {task.status === 'pending' && (
-                            <button onClick={() => completeTask(task)} disabled={completingTaskId === task.id}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">
-                              {completingTaskId === task.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />} Mark done
-                            </button>
-                          )}
+                          <button onClick={e => { e.stopPropagation(); openTask(task); }}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium ${task.status === 'pending' ? 'bg-neutral-900 text-white hover:bg-neutral-800' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'}`}>
+                            {task.status === 'pending' ? <><CheckCircle2 className="w-3.5 h-3.5" /> Update / Done</> : 'View'}
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -861,6 +953,145 @@ export function SalesMarketing() {
           </div>
         </div>
       )}
+
+      {/* Task Pop-up — for the person doing the job */}
+      {selectedTask && (() => {
+        const t = selectedTask;
+        const type = taskTypeInfo(t.task_type);
+        const deal = t.deal_id ? deals[t.deal_id] : undefined;
+        const lead = t.lead_id ? leads.find(l => l.id === t.lead_id) : undefined;
+        const clientName = deal?.client_name ?? lead?.contact_name ?? lead?.name;
+        const clientPhone = deal?.client_phone ?? lead?.phone;
+        const overdue = t.status === 'pending' && t.due_date && new Date(t.due_date) < new Date(new Date().toDateString());
+        const history = activities.filter(a => (t.deal_id && a.deal_id === t.deal_id) || (t.lead_id && a.lead_id === t.lead_id)).slice(0, 8);
+        const outcomes = OUTCOMES[t.task_type ?? 'other'] ?? OUTCOMES.other;
+        const budget = budgetText(deal?.budget_min, deal?.budget_max);
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setSelectedTask(null)}>
+            <div className="bg-white rounded-2xl w-full max-w-xl max-h-[92vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+              {/* Header: the job */}
+              <div className={`p-5 border-b ${t.status === 'completed' ? 'bg-green-50 border-green-100' : overdue ? 'bg-red-50 border-red-100' : 'bg-blue-50 border-blue-100'}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={`text-[11px] px-2 py-0.5 rounded font-semibold uppercase tracking-wide ${type.color}`}>{type.label}</span>
+                      {t.status === 'completed'
+                        ? <span className="text-xs font-medium text-green-700">✓ Done{t.completed_at ? ` ${timeAgo(t.completed_at)}` : ''}</span>
+                        : overdue ? <span className="text-xs font-medium text-red-600">Overdue</span>
+                        : <span className="text-xs font-medium text-blue-700">To do</span>}
+                    </div>
+                    <h2 className="text-lg font-semibold text-neutral-900 leading-snug">{t.action}</h2>
+                  </div>
+                  <button onClick={() => setSelectedTask(null)} className="p-1.5 hover:bg-white/60 rounded-lg flex-shrink-0"><X className="w-5 h-5" /></button>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mt-4">
+                  <div>
+                    <label className="block text-[11px] font-medium text-neutral-500 uppercase tracking-wide mb-1">Due</label>
+                    <input type="date" value={t.due_date ?? ''} onChange={e => rescheduleTask(t, e.target.value)} disabled={t.status === 'completed'}
+                      className="w-full px-2.5 py-1.5 border border-neutral-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-neutral-500 uppercase tracking-wide mb-1">Who is doing it</label>
+                    {StaffSelect({ value: t.assigned_to ?? '', onChange: v => reassignTask(t, v), placeholder: t.assigned_to_name ?? '— Unassigned —', className: 'w-full px-2.5 py-1.5 border border-neutral-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500' })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                {/* Client */}
+                <div className="flex items-center justify-between gap-3 border border-neutral-200 rounded-xl p-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-11 h-11 rounded-full bg-neutral-900 text-white flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                      {(clientName ?? '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-neutral-900 truncate">{clientName ?? 'No client linked'}</p>
+                      <p className="text-xs text-neutral-500">{clientPhone ?? 'No phone number'}{deal?.client_type ? ` · ${deal.client_type}` : lead?.lead_type ? ` · ${lead.lead_type}` : ''}</p>
+                    </div>
+                  </div>
+                  <ContactButtons phone={clientPhone} name={clientName} />
+                </div>
+
+                {/* Context (read-only) */}
+                <div className="bg-neutral-50 rounded-xl p-4">
+                  <p className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wide mb-2">{deal ? 'About this deal' : lead ? 'About this company lead' : 'About'}</p>
+                  <p className="text-sm font-medium text-neutral-900">{t.subject}</p>
+                  {deal && (
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-neutral-600">
+                      {deal.property_type && <span>{deal.property_type}</span>}
+                      {deal.location && <span>📍 {deal.location}</span>}
+                      {budget && <span>💰 {budget}</span>}
+                      <span>Stage: <strong>{STAGE_LABEL[deal.stage] ?? deal.stage}</strong></span>
+                      {deal.assigned_broker && <span>Handled by {staffName(deal.assigned_broker) ?? '—'}</span>}
+                    </div>
+                  )}
+                  {lead && (
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-neutral-600">
+                      <span className="capitalize">Status: <strong>{lead.status}</strong></span>
+                      {lead.source && <span>via {lead.source}</span>}
+                    </div>
+                  )}
+                </div>
+
+                {/* How did it go? */}
+                {t.status === 'pending' ? (
+                  <div>
+                    <p className="text-sm font-semibold text-neutral-900 mb-2">How did it go?</p>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {outcomes.map(o => (
+                        <button key={o} onClick={() => setTaskOutcome(taskOutcome === o ? '' : o)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${taskOutcome === o ? 'bg-neutral-900 text-white border-neutral-900' : 'border-neutral-200 text-neutral-700 hover:bg-neutral-50'}`}>
+                          {o}
+                        </button>
+                      ))}
+                    </div>
+                    <textarea rows={2} value={taskUpdateNote} onChange={e => setTaskUpdateNote(e.target.value)}
+                      placeholder="Add details — e.g. Client wants to see it again on Saturday with spouse"
+                      className={`${inputCls} resize-none`} />
+                    {taskError && <p className="text-xs text-red-600 mt-2">{taskError}</p>}
+                    <p className="text-[11px] text-neutral-400 mt-2">{deal ? 'Saved to the Activity Log and to the deal\'s notes, so the person handling the deal sees it.' : 'Saved to the Activity Log.'}</p>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between bg-green-50 border border-green-100 rounded-xl px-4 py-3">
+                    <p className="text-sm text-green-800">This task is done.</p>
+                    <button onClick={() => reopenTask(t)} className="text-xs text-green-700 hover:underline">Reopen</button>
+                  </div>
+                )}
+
+                {/* Recent history */}
+                {activityReady && history.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wide mb-2">Recent history with this client</p>
+                    <div className="border border-neutral-200 rounded-xl divide-y divide-neutral-100">
+                      {history.map(a => <ActivityRow key={a.id} a={a} />)}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-neutral-200 space-y-2">
+                {t.status === 'pending' && (
+                  <div className="flex gap-2">
+                    <button onClick={saveTaskProgress} disabled={!!savingTaskUpdate || (!taskOutcome && !taskUpdateNote.trim())}
+                      className="flex-1 px-4 py-2.5 border border-neutral-200 rounded-lg text-sm font-medium hover:bg-neutral-50 disabled:opacity-50 flex items-center justify-center gap-2">
+                      {savingTaskUpdate === 'update' && <Loader2 className="w-4 h-4 animate-spin" />} Save update
+                    </button>
+                    <button onClick={finishSelectedTask} disabled={!!savingTaskUpdate}
+                      className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                      {savingTaskUpdate === 'done' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Mark done
+                    </button>
+                  </div>
+                )}
+                <div className="flex justify-center gap-4 text-xs">
+                  {deal && <button onClick={() => navigate(`/app/brokerage?deal=${deal.id}`)} className="text-neutral-500 hover:text-neutral-800 inline-flex items-center gap-1">Open full deal <ExternalLink className="w-3 h-3" /></button>}
+                  {lead && <button onClick={() => { setSelectedTask(null); openLead(lead); }} className="text-neutral-500 hover:text-neutral-800 inline-flex items-center gap-1">Open company lead <ExternalLink className="w-3 h-3" /></button>}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Lead Panel */}
       {selectedLead && (
