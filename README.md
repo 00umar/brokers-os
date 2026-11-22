@@ -28,11 +28,11 @@ It was originally built with 765 Realty (Lagos), which is no longer a client (as
 |---|---|---|
 | Dashboard | `/app` | Overview |
 | Brokerage Operations | `/app/brokerage` | Intake queue, 7-stage deal pipeline, client accounts, listings, social leads, analytics, offer letters |
-| Sales & Marketing | `/app/sales` | Leads, follow-ups, partnerships, activity tracking |
+| Sales & Marketing | `/app/sales` | Team Tasks (calls, inspections, follow-ups given out from deals), Company Leads (B2B), real Activity Log |
 | Project Management | `/app/projects` | Project wizard, phases, tasks, "Journey" view, evidence, client report |
 | Workforce KPI | `/app/workforce` | Staff performance, weekly reports, approve/reject, worker responses |
 | Field Operations | `/app/field` | Mobile view for field workers: tasks, photo/voice evidence, weekly report, report blocked tasks via WhatsApp |
-| Team Management | `/app/settings` | Invite staff, change roles, set which modules managers can access |
+| Team Management | `/app/settings` | Invite staff, change roles, set each person's team (e.g. Sales & Marketing), set which modules managers can access |
 | Company Settings | `/app/company-settings` | Company name and contact email, bank details, WhatsApp, Facebook/Instagram and WhatsApp lead-capture connections |
 
 ### Roles
@@ -139,6 +139,10 @@ The Meta (Facebook/Instagram) verify token still contains the old "765" naming o
 - [ ] **Fill in Company Settings:** company name, contact email, WhatsApp manager number and bank details. Offer letters, payment instructions, the client portal, field worker WhatsApp buttons and staff messages all read from here. Anything not filled in shows "Not set" or a neutral placeholder.
 - [ ] **Public pages are shared by all companies.** `/listings` and `/intake` show every company's listings, and intake requests don't record which company they are for, so these pages carry Brokers OS branding. The proper fix is a public link per company (e.g. `/c/765-realty/listings`).
 - [ ] **Social leads/posts are visible to every company.** Restrict the database rules to the user's own company before real brokers start.
+- [ ] **Run section 14 of `migrations_pending.sql`** (Activity Log, task types).
+- [ ] **Create the `listing-images` storage bucket** (Supabase → Storage → New bucket, public). It is still missing on the live database.
+- [ ] **Decide: Company Leads vs Brokerage leads.** They're kept separate for now (B2B vs individuals).
+- [ ] **No TypeScript checker in the project.** Add `typescript` and a `tsconfig.json`, then fix the database type mismatch so real type checks can run.
 - [ ] **Confirm which migrations have run** on the live database.
 - [ ] **Later (when on Supabase Pro): connect Supabase to GitHub.** Not needed now, because database changes are run by hand from the `.sql` files. When there are real clients, move the SQL into `supabase/migrations/` and connect it, so database changes deploy automatically with the code.
 - [ ] **Finish the move to `brokers-os-app.vercel.app`:**

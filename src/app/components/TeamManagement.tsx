@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { DEPARTMENTS, SALES_DEPARTMENT } from '../../lib/activity';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Profile, UserRole } from '../../lib/database.types';
 import {
@@ -151,6 +152,12 @@ export function TeamManagement() {
     setAccessModal(null);
   };
 
+  const changeDepartment = async (id: string, department: string) => {
+    const value = department || null;
+    await supabase.from('profiles').update({ department: value }).eq('id', id);
+    setStaff(prev => prev.map(s => s.id === id ? { ...s, department: value ?? undefined } : s));
+  };
+
   const changeRole = async (id: string, role: UserRole) => {
     setChangingRoleId(id);
     setRoleDropdownId(null);
@@ -215,11 +222,12 @@ export function TeamManagement() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-          <table className="w-full min-w-[620px]">
+          <table className="w-full min-w-[760px]">
             <thead className="bg-neutral-50 border-b border-neutral-200">
               <tr>
                 <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Staff Member</th>
                 <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Role</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Team</th>
                 <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Status</th>
                 <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Joined</th>
                 <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Actions</th>
@@ -248,6 +256,16 @@ export function TeamManagement() {
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium capitalize ${ROLE_COLORS[member.role] ?? 'bg-gray-100 text-gray-700'}`}>
                       {member.role.replace('_', ' ')}
                     </span>
+                  </td>
+                  <td className="px-5 py-4">
+                    <select
+                      value={member.department ?? ''}
+                      onChange={e => changeDepartment(member.id, e.target.value)}
+                      className={`px-2 py-1 border rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${member.department === SALES_DEPARTMENT ? 'border-blue-300 text-blue-700 font-medium' : 'border-neutral-200 text-neutral-600'}`}
+                    >
+                      <option value="">— No team —</option>
+                      {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
                   </td>
                   <td className="px-5 py-4">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium capitalize ${STATUS_COLORS[member.status ?? 'pending'] ?? 'bg-gray-100 text-gray-700'}`}>

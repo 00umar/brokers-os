@@ -238,8 +238,26 @@ export interface SalesTask {
   subject: string
   action: string
   assigned_to_name?: string
+  assigned_to?: string | null
+  task_type?: TaskType | null
   due_date?: string
   status: 'pending' | 'completed'
+  completed_at?: string | null
+  company_id?: string | null
+  created_at: string
+}
+
+export type TaskType = 'call' | 'inspection' | 'send_details' | 'meeting' | 'other'
+
+export interface ActivityEntry {
+  id: string
+  company_id?: string | null
+  actor_id?: string | null
+  actor_name?: string | null
+  type: string
+  description: string
+  deal_id?: string | null
+  lead_id?: string | null
   created_at: string
 }
 

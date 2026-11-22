@@ -4,6 +4,22 @@ A dated record of what changed and why. Newest entries are at the top. Every cha
 
 ---
 
+## 2026-11-22 (Sales & Marketing rebuild)
+**Why:** Sales & Marketing didn't match what was originally intended. Partnerships and Activity Log were fake data, the Filter and Add Partner buttons did nothing, two top numbers never changed, and the lead pop-up was small and nearly useless.
+
+**What Sales & Marketing is for:** the team that does the legwork on leads. When a deal in Brokerage gets a To-do ("call the client", "go for inspection"), the person doing it is usually on the Sales & Marketing team, and the task appears in their Sales & Marketing → Team Tasks.
+
+- **Team Management → new "Team" column.** Staff can be marked as **Sales & Marketing** (or Operations, Field, Management, Admin). Sales & Marketing people are listed first in every "Who is doing it?" dropdown.
+- **Team Tasks** (was Follow-ups): task type (Call client, Inspection, Send details, Meeting, Other), **My tasks / Whole team**, To do / Done filters, the client's name and phone with **Call** and **WhatsApp** buttons, **Open deal** (jumps straight to the deal in Brokerage), and **Mark done**.
+- **Activity Log is now real.** It automatically records tasks created and done (a completed call shows as a call), notes, hand-overs, stage changes, new leads, status changes and conversions.
+- **Company Leads** (was Business Leads): clearly labelled as companies (developers, investors, corporates), with a pointer to Brokerage → Social Leads for individual buyers. The working status filter replaces the dead Filter button, and there's a new Handled By column.
+- **Lead pop-up rebuilt:** larger; Call, WhatsApp and Email buttons; editable details; Handled By; status; tasks on the lead; notes and full history; Convert to Deal (the new deal keeps the Handled By person and opens straight in Brokerage).
+- **Partnerships hidden** until it's built properly (it was fake data).
+- **Brokerage To-do:** task type added, and it's linked to Team Tasks by person, not just by typed name.
+- **Database:** section 14 of `migrations_pending.sql` adds the `activity_log` table and the `task_type`, `assigned_to` and `completed_at` columns on tasks. The screens still work before it's run (no history, and tasks save without a type).
+- **Business Leads vs Brokerage leads:** kept separate (assumed to be B2B), pending the owner's confirmation.
+- Note: the project has no TypeScript checker installed, so earlier "typecheck passed" checks weren't real. Changed files were checked with a temporary TypeScript install. The only remaining errors are a known existing mismatch between the database types and the library version.
+
 ## 2026-11-22
 - **Plainer wording in the deal panel.** "Assigned To" is now **"Handled By"** (the person in charge of the whole client). "Sales Support" is now **"To-do"** (small jobs on the deal), and a new to-do is filled in automatically with the Handled By person; change it only to give the job to someone else. The pipeline table column is renamed to match.
 - **"Load demo leads" button in Brokerage → Social Leads** (admins only). It adds 6 demo posts and 16 demo leads through the app using the admin's own login, because running the SQL seed didn't populate the tab. If the database blocks it, the exact error is shown on screen. A "Remove demo leads" button clears them. Demo rows are tagged `demo-`, and the data lives in `src/lib/demoSocialData.ts`.

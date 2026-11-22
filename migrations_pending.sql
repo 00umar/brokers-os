@@ -319,3 +319,40 @@ END $$;
 
 -- Make the API pick up the new columns immediately
 NOTIFY pgrst, 'reload schema';
+
+
+-- ============================================================
+-- 14. SALES & MARKETING — real activity log + richer team tasks (added 2026-11-22)
+-- ============================================================
+
+-- Every action the team takes (task done, note, hand-over, stage change...)
+CREATE TABLE IF NOT EXISTS activity_log (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  company_id uuid REFERENCES companies(id) ON DELETE CASCADE,
+  actor_id uuid REFERENCES profiles(id) ON DELETE SET NULL,
+  actor_name text,
+  type text NOT NULL,            -- call, inspection, meeting, note, task_done, task_created, handover, stage, lead_created, lead_status, converted, other
+  description text NOT NULL,
+  deal_id uuid REFERENCES deals(id) ON DELETE CASCADE,
+  lead_id uuid REFERENCES leads(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Company members can use activity log" ON activity_log;
+CREATE POLICY "Company members can use activity log" ON activity_log
+  FOR ALL USING (
+    company_id IS NULL
+    OR company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid())
+  )
+  WITH CHECK (auth.role() = 'authenticated');
+
+-- Team tasks: what kind of task, who exactly, when it was done
+ALTER TABLE sales_tasks ADD COLUMN IF NOT EXISTS task_type text DEFAULT 'other';
+ALTER TABLE sales_tasks ADD COLUMN IF NOT EXISTS assigned_to uuid REFERENCES profiles(id) ON DELETE SET NULL;
+ALTER TABLE sales_tasks ADD COLUMN IF NOT EXISTS completed_at timestamptz;
+
+-- Leads: who is handling them (column may already exist)
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS assigned_to uuid;
+
+NOTIFY pgrst, 'reload schema';

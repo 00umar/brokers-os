@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router';
 import {
   Plus, Search, DollarSign, MapPin, Phone, Mail, Building2, X,
   Send, Home, ShieldCheck, TrendingUp, Banknote, Loader2,
@@ -11,6 +12,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useCompanySettings } from '../../hooks/useCompanySettings';
 import { loadDemoSocialData, clearDemoSocialData } from '../../lib/demoSocialData';
 import { useSocialFeed } from '../../hooks/useSocialFeed';
+import { fetchCompanyStaff, logActivity, insertSalesTask, TASK_TYPES, taskTypeInfo, SALES_DEPARTMENT, type StaffMember } from '../../lib/activity';
+import type { TaskType } from '../../lib/database.types';
 import type { Client, Deal, BrokerNote, IntakeRequest, Listing, DealStage, SalesTask, OfferLetter } from '../../lib/database.types';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -122,11 +125,12 @@ export function BrokerageOperations() {
   // Sales support
   const [dealSalesTasks, setDealSalesTasks] = useState<SalesTask[]>([]);
   const [showSalesRequest, setShowSalesRequest] = useState(false);
-  const [salesRequestForm, setSalesRequestForm] = useState({ action: '', assigned_to_name: '', due_date: '' });
+  const [salesRequestForm, setSalesRequestForm] = useState<{ action: string; assigned_to: string; due_date: string; task_type: TaskType }>({ action: '', assigned_to: '', due_date: '', task_type: 'call' });
   const [savingSalesRequest, setSavingSalesRequest] = useState(false);
 
   // Staff who can be assigned deals / tasks
-  const [staff, setStaff] = useState<{ id: string; full_name: string; role: string }[]>([]);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [assigningDeal, setAssigningDeal] = useState(false);
 
   // Offer letters
@@ -180,19 +184,22 @@ export function BrokerageOperations() {
   }, []);
 
   useEffect(() => {
-    async function fetchStaff() {
-      let q = supabase
-        .from('profiles')
-        .select('id, full_name, role, status, company_id')
-        .neq('role', 'client')
-        .order('full_name');
-      if (profile?.company_id) q = q.eq('company_id', profile.company_id);
-      const { data } = await q;
-      setStaff(((data ?? []) as { id: string; full_name: string; role: string; status?: string }[])
-        .filter(s => s.status !== 'suspended' && s.status !== 'pending' && s.full_name));
-    }
-    fetchStaff();
+    fetchCompanyStaff(profile?.company_id).then(setStaff);
   }, [profile?.company_id]);
+
+  // Open a deal directly from a link, e.g. /app/brokerage?deal=<id> (used by Team Tasks)
+  useEffect(() => {
+    const dealId = searchParams.get('deal');
+    if (!dealId || loadingDeals) return;
+    const deal = Object.values(dealsByStage).flat().find(d => d.id === dealId);
+    if (deal) {
+      setActiveTab('pipeline');
+      openDeal(deal);
+    }
+    searchParams.delete('deal');
+    setSearchParams(searchParams, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, loadingDeals]);
 
   function staffName(id?: string | null) {
     return id ? staff.find(s => s.id === id)?.full_name ?? null : null;
@@ -221,6 +228,7 @@ export function BrokerageOperations() {
         stage_at_time: selectedDeal.stage,
       }).select().single();
       if (note) setDealNotes(p => [note as BrokerNote, ...p]);
+      logActivity(profile, { type: 'handover', description: newId ? `Handed "${selectedDeal.title}" to ${who}` : `Unassigned "${selectedDeal.title}"`, deal_id: selectedDeal.id });
     }
     setAssigningDeal(false);
   }
@@ -310,13 +318,17 @@ export function BrokerageOperations() {
       .from('offer_letters').select('*').eq('deal_id', deal.id);
     setDealLetters((letters as OfferLetter[]) ?? []);
     setShowSalesRequest(false);
-    setSalesRequestForm({ action: '', assigned_to_name: '', due_date: '' });
+    setSalesRequestForm({ action: '', assigned_to: '', due_date: '', task_type: 'call' });
   }
 
   async function changeStage(stage: DealStage) {
     if (!selectedDeal) return;
     setChangingStage(true);
     await supabase.from('deals').update({ stage }).eq('id', selectedDeal.id);
+    if (stage !== selectedDeal.stage) {
+      const stageName = PIPELINE_STAGES.find(s => s.id === stage)?.name ?? stage;
+      logActivity(profile, { type: 'stage', description: `Moved "${selectedDeal.title}" to ${stageName}`, deal_id: selectedDeal.id });
+    }
     setSelectedDeal(d => d ? { ...d, stage } : null);
     setChangingStage(false);
     fetchDeals();
@@ -355,7 +367,10 @@ export function BrokerageOperations() {
       author_name: profile?.full_name ?? 'Broker',
       stage_at_time: selectedDeal.stage,
     }).select().single();
-    if (data) setDealNotes(p => [data, ...p]);
+    if (data) {
+      setDealNotes(p => [data, ...p]);
+      logActivity(profile, { type: 'note', description: `Note on "${selectedDeal.title}": ${dealNote.trim().slice(0, 120)}`, deal_id: selectedDeal.id });
+    }
     setDealNote('');
     setSavingNote(false);
   }
@@ -363,18 +378,22 @@ export function BrokerageOperations() {
   async function assignToSales() {
     if (!selectedDeal || !salesRequestForm.action.trim()) return;
     setSavingSalesRequest(true);
-    const { data } = await supabase.from('sales_tasks').insert({
+    const assigneeName = staffName(salesRequestForm.assigned_to);
+    const { data } = await insertSalesTask({
       deal_id: selectedDeal.id,
       subject: selectedDeal.title,
       action: salesRequestForm.action.trim(),
-      assigned_to_name: salesRequestForm.assigned_to_name || undefined,
+      task_type: salesRequestForm.task_type,
+      assigned_to: salesRequestForm.assigned_to || null,
+      assigned_to_name: assigneeName ?? undefined,
       due_date: salesRequestForm.due_date || undefined,
       status: 'pending',
       company_id: profile?.company_id ?? undefined,
-    }).select().single();
+    });
     if (data) {
       setDealSalesTasks(p => [data as SalesTask, ...p]);
-      setSalesRequestForm({ action: '', assigned_to_name: '', due_date: '' });
+      logActivity(profile, { type: 'task_created', description: `New ${taskTypeInfo(salesRequestForm.task_type).label.toLowerCase()} task on "${selectedDeal.title}"${assigneeName ? ` for ${assigneeName}` : ''}: ${salesRequestForm.action.trim()}`, deal_id: selectedDeal.id });
+      setSalesRequestForm({ action: '', assigned_to: '', due_date: '', task_type: 'call' });
       setShowSalesRequest(false);
     }
     setSavingSalesRequest(false);
@@ -1758,7 +1777,7 @@ export function BrokerageOperations() {
                     <option value="">— Unassigned —</option>
                     {staff.map(s => (
                       <option key={s.id} value={s.id}>
-                        {s.full_name}{s.id === profile?.id ? ' (me)' : ''} · {s.role.replace('_', ' ')}
+                        {s.full_name}{s.id === profile?.id ? ' (me)' : ''} · {s.department === SALES_DEPARTMENT ? 'Sales & Marketing' : s.role.replace('_', ' ')}
                       </option>
                     ))}
                   </select>
@@ -1931,7 +1950,7 @@ export function BrokerageOperations() {
                   <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">To-do</p>
                   <button
                     onClick={() => {
-                      if (!showSalesRequest) setSalesRequestForm(f => ({ ...f, assigned_to_name: staffName(selectedDeal.assigned_broker) ?? '' }));
+                      if (!showSalesRequest) setSalesRequestForm(f => ({ ...f, assigned_to: selectedDeal.assigned_broker ?? '' }));
                       setShowSalesRequest(!showSalesRequest);
                     }}
                     className="text-xs text-blue-600 hover:text-blue-700 font-medium"
@@ -1945,7 +1964,10 @@ export function BrokerageOperations() {
                     {dealSalesTasks.map(task => (
                       <div key={task.id} className="bg-blue-50 border border-blue-200 rounded-xl p-3">
                         <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm text-blue-900">{task.action}</p>
+                          <p className="text-sm text-blue-900">
+                            <span className={`inline-flex mr-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide align-middle ${taskTypeInfo(task.task_type).color}`}>{taskTypeInfo(task.task_type).label}</span>
+                            {task.action}
+                          </p>
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
                             task.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
                           }`}>
@@ -1970,6 +1992,23 @@ export function BrokerageOperations() {
                 {showSalesRequest && (
                   <div className="bg-neutral-50 rounded-xl p-4 space-y-3 border border-neutral-200 mb-2">
                     <div>
+                      <label className="block text-xs text-neutral-500 mb-1">Type</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {TASK_TYPES.map(t => (
+                          <button
+                            key={t.value}
+                            type="button"
+                            onClick={() => setSalesRequestForm(f => ({ ...f, task_type: t.value }))}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                              salesRequestForm.task_type === t.value ? `${t.color} border-current` : 'border-neutral-200 text-neutral-600 bg-white hover:bg-neutral-50'
+                            }`}
+                          >
+                            {t.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
                       <label className="block text-xs text-neutral-500 mb-1">What needs to be done? *</label>
                       <input
                         value={salesRequestForm.action}
@@ -1982,16 +2021,23 @@ export function BrokerageOperations() {
                       <div>
                         <label className="block text-xs text-neutral-500 mb-1">Who is doing it?</label>
                         <select
-                          value={salesRequestForm.assigned_to_name}
-                          onChange={e => setSalesRequestForm(f => ({ ...f, assigned_to_name: e.target.value }))}
+                          value={salesRequestForm.assigned_to}
+                          onChange={e => setSalesRequestForm(f => ({ ...f, assigned_to: e.target.value }))}
                           className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="">Select team member</option>
-                          {staff.map(s => (
-                            <option key={s.id} value={s.full_name}>
-                              {s.full_name}{s.id === profile?.id ? ' (me)' : ''}
-                            </option>
-                          ))}
+                          {staff.some(s => s.department === SALES_DEPARTMENT) && (
+                            <optgroup label="Sales & Marketing team">
+                              {staff.filter(s => s.department === SALES_DEPARTMENT).map(s => (
+                                <option key={s.id} value={s.id}>{s.full_name}{s.id === profile?.id ? ' (me)' : ''}</option>
+                              ))}
+                            </optgroup>
+                          )}
+                          <optgroup label={staff.some(s => s.department === SALES_DEPARTMENT) ? 'Others' : 'Team'}>
+                            {staff.filter(s => s.department !== SALES_DEPARTMENT).map(s => (
+                              <option key={s.id} value={s.id}>{s.full_name}{s.id === profile?.id ? ' (me)' : ''}</option>
+                            ))}
+                          </optgroup>
                         </select>
                       </div>
                       <div>
