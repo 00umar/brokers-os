@@ -957,7 +957,7 @@ export function BrokerageOperations() {
                         <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Stage</th>
                         <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Budget</th>
                         <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Location</th>
-                        <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Assigned To</th>
+                        <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Handled By</th>
                         <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Payment</th>
                       </tr>
                     </thead>
@@ -1745,9 +1745,9 @@ export function BrokerageOperations() {
                 </div>
               </div>
 
-              {/* Assigned to */}
+              {/* Handled by (deal owner) */}
               <div>
-                <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-3">Assigned To</p>
+                <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-3">Handled By</p>
                 <div className="flex items-center gap-3">
                   <select
                     value={selectedDeal.assigned_broker ?? ''}
@@ -1925,15 +1925,18 @@ export function BrokerageOperations() {
                 </button>
               </div>
 
-              {/* Sales Support */}
+              {/* To-do (tasks on this deal) */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">Sales Support</p>
+                  <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">To-do</p>
                   <button
-                    onClick={() => setShowSalesRequest(!showSalesRequest)}
+                    onClick={() => {
+                      if (!showSalesRequest) setSalesRequestForm(f => ({ ...f, assigned_to_name: staffName(selectedDeal.assigned_broker) ?? '' }));
+                      setShowSalesRequest(!showSalesRequest);
+                    }}
                     className="text-xs text-blue-600 hover:text-blue-700 font-medium"
                   >
-                    + Assign Task
+                    + Add to-do
                   </button>
                 </div>
 
@@ -1961,7 +1964,7 @@ export function BrokerageOperations() {
                 )}
 
                 {dealSalesTasks.length === 0 && !showSalesRequest && (
-                  <p className="text-sm text-neutral-400 italic mb-1">No sales tasks yet.</p>
+                  <p className="text-sm text-neutral-400 italic mb-1">No to-dos yet.</p>
                 )}
 
                 {showSalesRequest && (
@@ -1977,7 +1980,7 @@ export function BrokerageOperations() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs text-neutral-500 mb-1">Assign to</label>
+                        <label className="block text-xs text-neutral-500 mb-1">Who is doing it?</label>
                         <select
                           value={salesRequestForm.assigned_to_name}
                           onChange={e => setSalesRequestForm(f => ({ ...f, assigned_to_name: e.target.value }))}
@@ -2014,7 +2017,7 @@ export function BrokerageOperations() {
                         className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                         {savingSalesRequest ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                        Assign Task
+                        Add to-do
                       </button>
                     </div>
                   </div>
