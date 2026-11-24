@@ -5,6 +5,7 @@ A dated record of what changed and why. Newest entries are at the top. Every cha
 ---
 
 ## 2026-11-24
+- **Client signup fix:** signing up on the client portal now creates a client account. It was creating an office staff account, because the signup trigger wasn't told the role.
 - GitHub repo description added, and its website link updated to the new address.
 - Repo made public for a job application, at the owner's request. Full history was scanned first: no secret keys, tokens or `.env` files found. To be made private again if it isn't needed.
 
