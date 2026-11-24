@@ -4,6 +4,10 @@ A dated record of what changed and why. Newest entries are at the top. Every cha
 
 ---
 
+## 2026-11-24
+- GitHub repo description added, and its website link updated to the new address.
+- Repo made public for a job application, at the owner's request. Full history was scanned first: no secret keys, tokens or `.env` files found. To be made private again if it isn't needed.
+
 ## 2026-11-22 (Team Task pop-up)
 - **Team Tasks now open their own pop-up** instead of sending people into the full Brokerage deal manager. The deal pop-up is for the person handling the deal (stages, payment, offer letters). The task pop-up is for the person doing one job:
   - the task, its type and status, an editable due date (to reschedule), and "Who is doing it" (to reassign)
