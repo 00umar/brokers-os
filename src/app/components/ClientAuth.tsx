@@ -83,6 +83,8 @@ export default function ClientAuth() {
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: signupEmail,
       password: signupPassword,
+      // The signup trigger creates the profile from this; without it clients became office staff
+      options: { data: { full_name: fullName, role: 'client' } },
     });
 
     if (signUpError) {
